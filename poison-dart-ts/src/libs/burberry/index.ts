@@ -8,9 +8,9 @@ export * from './types';
 export * from './engine';
 
 // Re-export modules
-export * as actionSubmitter from './action_submitter/mod';
-export * as collector from './collector/mod';
-export * as executor from './executor/mod';
+export * as actionSubmitter from './action_submitter';
+export * as collector from './collector';
+export * as executor from './executor';
 
 // Re-export utils
 export * as utils from './utils/logger';

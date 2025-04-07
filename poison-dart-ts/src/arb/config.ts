@@ -83,7 +83,7 @@ export const DEFAULT_CONFIG: Partial<ArbConfig> = {
   },
   maxGasPrice: BigInt(300000000000), // 300 gwei
   minProfitThreshold: BigInt(1000000000000000), // 0.001 FTM
-  initialCapital: BigInt(1000000000000000000000), // 1000 FTM
+  initialCapital: BigInt(0b0), // 1000 FTM
   maxSlippage: 0.5, // 0.5%
   maxHops: 3,
   maxPoolsPerHop: 5,

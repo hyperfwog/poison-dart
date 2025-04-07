@@ -9,7 +9,7 @@ import { Collector, CollectorStream } from '../types';
  * IntervalCollector - emits events at regular intervals
  */
 export class IntervalCollector implements Collector<Date> {
-  private intervalMs: number;
+  private readonly intervalMs: number;
 
   constructor(intervalMs: number) {
     this.intervalMs = intervalMs;

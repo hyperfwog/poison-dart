@@ -2,6 +2,6 @@
  * DEX implementations index
  */
 
-export * from './mod.js';
-export * from './shadow.js';
-export * from './swapx.js';
+export * from './mod';
+export * from './shadow';
+export * from './swapx';

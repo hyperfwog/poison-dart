@@ -10,7 +10,7 @@ import { ActionSubmitter } from '../types';
  */
 export class ActionSubmitterMap<A1, A2> implements ActionSubmitter<A1> {
   private submitter: ActionSubmitter<A2>;
-  private f: (a: A1) => A2 | null | undefined;
+  private readonly f: (a: A1) => A2 | null | undefined;
 
   /**
    * Create a new ActionSubmitterMap

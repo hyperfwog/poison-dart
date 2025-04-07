@@ -2,28 +2,23 @@
  * Arbitrage strategy implementation
  */
 import { PublicClient, WalletClient, type Block, type Log, type Transaction, type Address } from 'viem';
-import { Strategy, ActionSubmitter } from '../libs/burberry/types.js';
-import { EventType, ActionType, type Event, type Action, Protocol } from './types.js';
-import { type ArbConfig } from './config.js';
-import { Path, Trader, type Dex } from './defi/mod.js';
-import { ShadowDex } from './defi/shadow.js';
-import { SwapXDex } from './defi/swapx.js';
+import { Strategy, ActionSubmitter } from '../libs/burberry';
+import { EventType, ActionType, type Event, type Action, Protocol } from './types';
+import { Path, type Dex } from './defi';
+import { ShadowDex } from './defi';
+import { SwapXDex } from './defi';
 
 /**
  * Arbitrage strategy
  */
 export class ArbStrategy implements Strategy<Event, Action> {
-  private publicClient: PublicClient;
-  private walletClient: WalletClient;
-  private config: ArbConfig;
-  private trader: Trader;
+  private readonly publicClient: PublicClient;
+  private readonly walletClient: WalletClient;
   private knownDexes: Map<string, Dex> = new Map();
 
-  constructor(publicClient: PublicClient, walletClient: WalletClient, config: ArbConfig) {
+  constructor(publicClient: PublicClient, walletClient: WalletClient) {
     this.publicClient = publicClient;
     this.walletClient = walletClient;
-    this.config = config;
-    this.trader = new Trader(publicClient, walletClient);
   }
 
   name(): string {

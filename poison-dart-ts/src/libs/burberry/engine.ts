@@ -3,7 +3,7 @@
  * Ported from Rust crate burberry/src/engine.rs
  */
 
-import { ActionChannelSubmitter } from './action_submitter/mod';
+import { ActionChannelSubmitter } from './action_submitter';
 import { Collector, Executor, Strategy } from './types';
 import { BroadcastChannel } from './utils/broadcast_channel';
 import { logger } from './utils/logger';

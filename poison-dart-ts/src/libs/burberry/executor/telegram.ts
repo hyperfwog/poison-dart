@@ -1,7 +1,7 @@
 /**
  * Telegram executor for sending notifications
  */
-import { Executor } from '../types.js';
+import { Executor } from '../types';
 
 /**
  * Message to be sent to Telegram

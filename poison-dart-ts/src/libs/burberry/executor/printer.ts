@@ -3,8 +3,8 @@
  * An executor that prints actions to the console
  */
 
-import { Executor } from '../types.js';
-import { logger } from '../utils/logger.js';
+import { Executor } from '../types';
+import { logger } from '../utils/logger';
 
 /**
  * PrinterExecutor - prints actions to the console

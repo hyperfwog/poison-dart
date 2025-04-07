@@ -4,18 +4,13 @@
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sonic } from 'viem/chains';
-import { Engine } from '../libs/burberry/engine.js';
-import { BlockCollector } from '../libs/burberry/collector/block_collector.js';
-import { LogCollector } from '../libs/burberry/collector/log_collector.js';
-import { MempoolCollector } from '../libs/burberry/collector/mempool_collector.js';
-import { PrinterExecutor } from '../libs/burberry/executor/printer.js';
-import { TelegramExecutor } from '../libs/burberry/executor/telegram.js';
-import { ActionType, EventType, type Event, type Action } from './types.js';
-import { Executor } from '../libs/burberry/types.js';
-import { Message } from '../libs/burberry/executor/telegram.js';
-import { loadConfig } from './config.js';
-import { ArbStrategy } from './strategy.js';
-import { TransactionExecutor } from './executor.js';
+import { ActionType, EventType, type Event, type Action } from './types';
+import { loadConfig } from './config';
+import { ArbStrategy } from './strategy';
+import { TransactionExecutor } from './executor';
+import {Engine, Executor} from '../libs/burberry';
+import { MempoolCollector } from '../libs/burberry/collector';
+import {Message, PrinterExecutor, TelegramExecutor} from '../libs/burberry/executor';
 
 /**
  * Main function to run the arbitrage bot

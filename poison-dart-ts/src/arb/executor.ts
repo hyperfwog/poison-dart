@@ -1,8 +1,8 @@
 /**
  * Transaction executor for the arbitrage bot
  */
-import { WalletClient, PublicClient, type Hash } from 'viem';
-import { Executor } from '../libs/burberry/types.js';
+import { WalletClient, PublicClient } from 'viem';
+import { Executor } from '../libs/burberry';
 import { ActionType, type Action } from './types.js';
 
 /**

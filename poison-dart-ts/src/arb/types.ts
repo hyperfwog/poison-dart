@@ -2,7 +2,7 @@
  * Types for the arbitrage bot
  */
 import { type Block, type Log, type Transaction, type Hash } from 'viem';
-import { type Message } from '../libs/burberry/executor/telegram.js';
+import { type Message } from '../libs/burberry/executor';
 
 /**
  * Event types that can be processed by the arbitrage strategy

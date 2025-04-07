@@ -3,8 +3,8 @@
  * Ported from Rust crate burberry/src/action_submitter/telegram.rs
  */
 
-import { ActionSubmitter } from '../types.js';
-import { logger } from '../utils/logger.js';
+import { ActionSubmitter } from '../types';
+import { logger } from '../utils/logger';
 
 /**
  * Message to be sent to Telegram
@@ -24,9 +24,9 @@ export interface Message {
  * TelegramMessageDispatcher - sends messages to Telegram
  */
 export class TelegramMessageDispatcher {
-  private errorReportBotToken?: string;
-  private errorReportChatId?: string;
-  private errorReportThreadId?: string;
+  private readonly errorReportBotToken?: string;
+  private readonly errorReportChatId?: string;
+  private readonly errorReportThreadId?: string;
 
   /**
    * Create a new TelegramMessageDispatcher

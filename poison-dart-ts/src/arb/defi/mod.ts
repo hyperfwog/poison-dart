@@ -1,8 +1,8 @@
 /**
  * DEX interface module
  */
-import { Address, Hash, PublicClient, WalletClient, encodeFunctionData, parseUnits } from 'viem';
-import { Protocol, Pool, Token, SwapEvent } from '../types.js';
+import { Address, Hash, PublicClient, WalletClient } from 'viem';
+import { Protocol, Pool } from '../types';
 
 /**
  * Interface for DEX interactions
@@ -62,7 +62,7 @@ export abstract class BaseDex implements Dex {
   protected walletClient: WalletClient;
   protected isA2B: boolean;
 
-  constructor(pool: Pool, publicClient: PublicClient, walletClient: WalletClient, isA2B = true) {
+  protected constructor(pool: Pool, publicClient: PublicClient, walletClient: WalletClient, isA2B = true) {
     this.pool = pool;
     this.publicClient = publicClient;
     this.walletClient = walletClient;
