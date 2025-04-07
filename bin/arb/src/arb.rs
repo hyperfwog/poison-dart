@@ -11,7 +11,7 @@ use std::{
 
 use async_trait::async_trait;
 use clap::Parser;
-use eyre::{ensure, ContextCompat, Result};
+use eyre::{bail, ensure, ContextCompat, Result};
 use itertools::Itertools;
 use object_pool::ObjectPool;
 use simulator::{HttpSimulator, SimulateCtx, Simulator};
@@ -99,14 +99,28 @@ pub struct ArbResult {
     pub tx_data: TransactionData,
 }
 
+use crate::strategy::graph_path_finder::BellmanFordPathFinder;
+
+// Hardcoded flag to enable/disable graph-based path finding
+const USE_GRAPH_BASED_PATH_FINDING: bool = false;
+
 pub struct Arb {
     defi: Defi,
+    path_finder: Option<BellmanFordPathFinder>,
 }
 
 impl Arb {
     pub async fn new(http_url: &str, simulator_pool: Arc<ObjectPool<Box<dyn Simulator>>>) -> Result<Self> {
         let defi = Defi::new(http_url, simulator_pool).await?;
-        Ok(Self { defi })
+        
+        // Initialize the path finder if graph-based path finding is enabled
+        let path_finder = if USE_GRAPH_BASED_PATH_FINDING {
+            Some(BellmanFordPathFinder::new(defi.get_dex_searcher()))
+        } else {
+            None
+        };
+        
+        Ok(Self { defi, path_finder })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -122,6 +136,119 @@ impl Arb {
     ) -> Result<ArbResult> {
         let gas_price = sim_ctx.epoch.gas_price;
 
+        // If graph-based path finding is enabled and the path finder is initialized
+        if USE_GRAPH_BASED_PATH_FINDING && self.path_finder.is_some() {
+            info!("Using graph-based path finding with Bellman-Ford algorithm");
+            
+            // Find arbitrage paths using Bellman-Ford
+            let timer = Instant::now();
+            let paths = self.path_finder.as_ref().unwrap()
+                .find_arbitrage_paths(coin_type, pool_id)
+                .await?;
+            let create_trial_ctx_duration = timer.elapsed();
+            
+            if paths.is_empty() {
+                bail!("No arbitrage paths found using Bellman-Ford algorithm");
+            }
+            
+            info!("Found {} arbitrage paths using Bellman-Ford", paths.len());
+            
+            // Grid search on the found paths
+            let starting_grid = 1_000_000u64; // 0.001 SUI
+            let mut cache_misses = 0;
+            let (max_trial_res, grid_search_duration) = {
+                let timer = Instant::now();
+                let mut joinset: JoinSet<Result<TrialResult>> = JoinSet::new();
+                
+                for path in &paths {
+                    for inc in 1..11 {
+                        let defi = self.defi.clone();
+                        let path = path.clone();
+                        let sender = sender;
+                        let gas_coins = gas_coins.clone();
+                        let sim_ctx = sim_ctx.clone();
+                        let grid = starting_grid.checked_mul(10u64.pow(inc)).context("Grid overflow")?;
+                        
+                        joinset.spawn(async move {
+                            let trade_res = defi.find_best_path_exact_in(
+                                &[path],
+                                sender,
+                                grid,
+                                TradeType::Flashloan,
+                                &gas_coins,
+                                &sim_ctx,
+                            ).await?;
+                            
+                            let profit = trade_res.profit();
+                            if profit <= 0 {
+                                return Ok(TrialResult::default());
+                            }
+                            
+                            Ok(TrialResult::new(
+                                &trade_res.path.coin_in_type(),
+                                grid,
+                                profit as u64,
+                                trade_res.path,
+                                trade_res.cache_misses,
+                            ))
+                        }.in_current_span());
+                    }
+                }
+                
+                let mut max_trial_res = TrialResult::default();
+                while let Some(Ok(trial_res)) = joinset.join_next().await {
+                    if let Ok(trial_res) = trial_res {
+                        if trial_res.cache_misses > cache_misses {
+                            cache_misses = trial_res.cache_misses;
+                        }
+                        if trial_res > max_trial_res {
+                            max_trial_res = trial_res;
+                        }
+                    }
+                }
+                
+                (max_trial_res, timer.elapsed())
+            };
+            
+            ensure!(
+                max_trial_res.profit > 0,
+                "cache_misses: {}. No profitable grid found",
+                cache_misses
+            );
+            
+            // No GSS for graph-based path finding for now
+            let gss_duration = None;
+            
+            let TrialResult {
+                amount_in,
+                trade_path,
+                profit,
+                ..
+            } = &max_trial_res;
+            
+            let mut source = source;
+            if source.deadline().is_some() {
+                source = source.with_arb_found_time(utils::current_time_ms());
+            }
+            source = source.with_bid_amount(*profit / 10 * 9);
+            
+            let tx_data = self
+                .defi
+                .build_final_tx_data(sender, *amount_in, trade_path, gas_coins, gas_price, source)
+                .await?;
+            
+            return Ok(ArbResult {
+                create_trial_ctx_duration,
+                grid_search_duration,
+                gss_duration,
+                best_trial_result: max_trial_res,
+                cache_misses,
+                source,
+                tx_data,
+            });
+        }
+        
+        // Traditional path finding
         let (ctx, create_trial_ctx_duration) = {
             let timer = Instant::now();
             let ctx = Arc::new(
@@ -144,7 +271,7 @@ impl Arb {
         let mut cache_misses = 0;
         let (mut max_trial_res, grid_search_duration) = {
             let timer = Instant::now();
-            let mut joinset = JoinSet::new();
+            let mut joinset: JoinSet<Result<TrialResult>> = JoinSet::new();
             for inc in 1..11 {
                 let ctx = ctx.clone();
                 let grid = starting_grid.checked_mul(10u64.pow(inc)).context("Grid overflow")?;

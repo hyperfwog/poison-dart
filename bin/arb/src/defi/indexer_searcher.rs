@@ -1,3 +1,5 @@
+use std::{any::Any, sync::Arc};
+
 use dex_indexer::{
     types::{Pool, Protocol},
     DexIndexer,
@@ -5,7 +7,6 @@ use dex_indexer::{
 use eyre::{bail, ensure, OptionExt, Result};
 use object_pool::ObjectPool;
 use simulator::Simulator;
-use std::sync::Arc;
 use sui_sdk::SUI_COIN_TYPE;
 use sui_types::base_types::ObjectID;
 use tokio::sync::OnceCell;
@@ -39,6 +40,20 @@ impl IndexerDexSearcher {
             simulator_pool,
             indexer,
         })
+    }
+    
+    // Create a new instance with an existing DexIndexer
+    pub async fn new_with_indexer(_http_url: &str, indexer: Arc<DexIndexer>, simulator_pool: Arc<ObjectPool<Box<dyn Simulator>>>) -> Result<Self> {
+        Ok(Self {
+            simulator_pool,
+            indexer,
+        })
+    }
+    
+    // Get the indexer
+    #[allow(dead_code)]
+    pub fn get_indexer(&self) -> Arc<DexIndexer> {
+        self.indexer.clone()
     }
 }
 
@@ -97,6 +112,10 @@ async fn new_dexes(
 
 #[async_trait::async_trait]
 impl DexSearcher for IndexerDexSearcher {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
     async fn find_dexes(&self, token_in_type: &str, token_out_type: Option<String>) -> Result<Vec<Box<dyn Dex>>> {
         let pools = if let Some(token_out_type) = token_out_type.as_ref() {
             self.indexer.get_pools_by_token01(token_in_type, token_out_type)

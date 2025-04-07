@@ -1,4 +1,5 @@
 mod arb_cache;
+pub mod graph_path_finder;
 mod worker;
 
 use std::{

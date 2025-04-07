@@ -13,6 +13,7 @@ mod turbos;
 mod utils;
 
 use std::{
+    any::Any,
     collections::{HashMap, HashSet},
     fmt,
     hash::Hash,
@@ -49,6 +50,10 @@ pub trait DexSearcher: Send + Sync {
     async fn find_dexes(&self, coin_in_type: &str, coin_out_type: Option<String>) -> Result<Vec<Box<dyn Dex>>>;
 
     async fn find_test_path(&self, path: &[ObjectID]) -> Result<Path>;
+    
+    // Support for downcasting
+    #[allow(dead_code)]
+    fn as_any(&self) -> &dyn Any;
 }
 
 #[async_trait::async_trait]
@@ -154,6 +159,11 @@ impl Defi {
             dex_searcher: Arc::new(dex_searcher),
             trader: Arc::new(trade),
         })
+    }
+    
+    // Get the dex searcher
+    pub fn get_dex_searcher(&self) -> Arc<dyn DexSearcher> {
+        self.dex_searcher.clone()
     }
 
     #[allow(dead_code)]
