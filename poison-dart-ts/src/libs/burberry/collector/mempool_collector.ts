@@ -351,10 +351,9 @@ export class MempoolCollector implements Collector<Transaction> {
       // Set the global forced shutdown flag to ensure any in-progress operations stop
       (global as any).__BURBERRY_FORCED_SHUTDOWN__ = true;
       
-      // Reset the flag after a short delay
-      setTimeout(() => {
-        (global as any).__BURBERRY_FORCED_SHUTDOWN__ = false;
-      }, 1000);
+      // Clear any pending sets to prevent further processing
+      this.pendingTxHashes.clear();
+      this.processedTxHashes.clear();
     };
 
     // Return an async iterator that yields transactions

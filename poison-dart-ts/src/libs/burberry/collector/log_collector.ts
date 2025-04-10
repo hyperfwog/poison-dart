@@ -437,10 +437,11 @@ export class LogCollector implements Collector<Log> {
       // Set the global forced shutdown flag to ensure any in-progress operations stop
       (global as any).__BURBERRY_FORCED_SHUTDOWN__ = true;
       
-      // Reset the flag after a short delay
-      setTimeout(() => {
-        (global as any).__BURBERRY_FORCED_SHUTDOWN__ = false;
-      }, 1000);
+      // Clear any pending API calls or timeouts
+      if (this.lastProcessedBlock) {
+        // Reset the last processed block to prevent further processing
+        this.lastProcessedBlock = undefined;
+      }
     };
 
     // Return an async iterator that yields logs

@@ -182,6 +182,9 @@ async function main() {
       logEngine.stop(10000),
       txEngine.stop(10000)
     ]);
+    
+    // Force exit the process to ensure all background operations are terminated
+    process.exit(0);
   });
 
   // Run the engines
@@ -215,6 +218,9 @@ async function main() {
   });
   
   logger.info("All engines stopped");
+  
+  // Force exit the process to ensure all background operations are terminated
+  process.exit(0);
 }
 
 // Run the example
