@@ -16,7 +16,7 @@ export class IntervalCollector implements Collector<Date> {
   }
 
   name(): string {
-    return "IntervalCollector";
+    return 'IntervalCollector';
   }
 
   async getEventStream(): Promise<CollectorStream<Date>> {
@@ -26,11 +26,11 @@ export class IntervalCollector implements Collector<Date> {
     return {
       async next(): Promise<IteratorResult<Date>> {
         // Wait for the interval
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
-        
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+
         // Emit the current time
         return { done: false, value: new Date() };
-      }
+      },
     };
   }
 }

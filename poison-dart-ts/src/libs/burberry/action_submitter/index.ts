@@ -58,7 +58,7 @@ export class ActionChannelSubmitter<A> implements ActionSubmitter<A> {
       return { success: true };
     } catch (e) {
       let errorMessage: string;
-      
+
       if (e instanceof ChannelError) {
         errorMessage = `Channel error: ${e.message}`;
       } else if (e instanceof Error) {
@@ -66,7 +66,7 @@ export class ActionChannelSubmitter<A> implements ActionSubmitter<A> {
       } else {
         errorMessage = String(e);
       }
-      
+
       logger.error(`Error submitting action: ${errorMessage}`);
       return { success: false, error: errorMessage };
     }

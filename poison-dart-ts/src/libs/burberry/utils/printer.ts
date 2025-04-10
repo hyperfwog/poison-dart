@@ -11,6 +11,8 @@ import { logger } from './logger';
  * @param prefix Optional prefix to add to the log message
  */
 export function printAction<A>(action: A, prefix: string = ''): void {
-  const message = prefix ? `${prefix}: ${JSON.stringify(action)}` : `Action: ${JSON.stringify(action)}`;
+  const message = prefix
+    ? `${prefix}: ${JSON.stringify(action)}`
+    : `Action: ${JSON.stringify(action)}`;
   logger.info(message);
 }

@@ -40,11 +40,9 @@ export class ChannelError extends Error {
    * @param lagCount The number of messages lagged
    */
   static lagged(lagCount: number): ChannelError {
-    return new ChannelError(
-      ChannelErrorType.LAGGED, 
-      `Channel lagged by ${lagCount} messages`,
-      { lagCount }
-    );
+    return new ChannelError(ChannelErrorType.LAGGED, `Channel lagged by ${lagCount} messages`, {
+      lagCount,
+    });
   }
 
   /**
@@ -81,7 +79,7 @@ export class BroadcastReceiver<T> implements AsyncIterator<T> {
   private readonly lagReportInterval: number;
 
   constructor(
-    channel: BroadcastChannel<T>, 
+    channel: BroadcastChannel<T>,
     maxLag: number,
     throwOnLag: boolean,
     lagReportInterval: number
@@ -90,7 +88,7 @@ export class BroadcastReceiver<T> implements AsyncIterator<T> {
     this.maxLag = maxLag;
     this.throwOnLag = throwOnLag;
     this.lagReportInterval = lagReportInterval;
-    
+
     // Register this receiver with the channel
     channel.addReceiver(this);
   }
@@ -100,24 +98,24 @@ export class BroadcastReceiver<T> implements AsyncIterator<T> {
    */
   receive(value: T): void {
     if (this.closed) return;
-    
+
     // If we have waiting resolvers, resolve them immediately
     if (this.resolvers.length > 0) {
       const resolver = this.resolvers.shift()!;
       resolver({ done: false, value });
       return;
     }
-    
+
     // Otherwise, add to buffer, potentially dropping old messages
     this.buffer.push(value);
     if (this.buffer.length > this.maxLag) {
       this.buffer.shift();
       this.lagCount++;
-      
+
       // Report lag at specified intervals
       if (this.lagCount % this.lagReportInterval === 0) {
         const error = ChannelError.lagged(this.lagCount);
-        
+
         if (this.throwOnLag) {
           throw error;
         } else {
@@ -132,15 +130,15 @@ export class BroadcastReceiver<T> implements AsyncIterator<T> {
    */
   close(): void {
     if (this.closed) return;
-    
+
     this.closed = true;
-    
+
     // Resolve any waiting resolvers with done
     for (const resolver of this.resolvers) {
       resolver({ done: true, value: undefined as any });
     }
     this.resolvers = [];
-    
+
     // Remove this receiver from the channel
     this.channel.removeReceiver(this);
   }
@@ -152,15 +150,15 @@ export class BroadcastReceiver<T> implements AsyncIterator<T> {
     if (this.closed) {
       return { done: true, value: undefined as any };
     }
-    
+
     // If we have buffered values, return one immediately
     if (this.buffer.length > 0) {
       const value = this.buffer.shift()!;
       return { done: false, value };
     }
-    
+
     // Otherwise, wait for a value
-    return new Promise<IteratorResult<T>>(resolve => {
+    return new Promise<IteratorResult<T>>((resolve) => {
       this.resolvers.push(resolve);
     });
   }
@@ -198,7 +196,7 @@ export class BroadcastChannel<T> {
       maxLag: capacity,
       throwOnLag: false,
       lagReportInterval: 100,
-      ...config
+      ...config,
     };
   }
 
@@ -211,7 +209,7 @@ export class BroadcastChannel<T> {
     if (this.closed) {
       throw ChannelError.closed();
     }
-    
+
     for (const receiver of this.receivers) {
       receiver.receive(value);
     }
@@ -226,7 +224,7 @@ export class BroadcastChannel<T> {
     if (this.closed) {
       return false;
     }
-    
+
     this.send(value);
     return true;
   }
@@ -240,9 +238,9 @@ export class BroadcastChannel<T> {
     if (this.closed) {
       throw ChannelError.closed();
     }
-    
+
     return new BroadcastReceiver<T>(
-      this, 
+      this,
       this.config.maxLag,
       this.config.throwOnLag,
       this.config.lagReportInterval
@@ -257,7 +255,7 @@ export class BroadcastChannel<T> {
     if (this.closed) {
       return null;
     }
-    
+
     return this.subscribe();
   }
 
@@ -266,13 +264,13 @@ export class BroadcastChannel<T> {
    */
   close(): void {
     if (this.closed) return;
-    
+
     this.closed = true;
-    
+
     for (const receiver of this.receivers) {
       receiver.close();
     }
-    
+
     this.receivers.clear();
   }
 

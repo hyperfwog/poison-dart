@@ -32,14 +32,14 @@ export interface ActionSubmitter<A> {
    * @param action The action to submit
    */
   submit(action: A): void;
-  
+
   /**
    * Submit an action asynchronously
    * @param action The action to submit
    * @returns A promise that resolves to the result of the submission
    */
   submitAsync(action: A): Promise<SubmitResult>;
-  
+
   /**
    * Try to submit an action
    * @param action The action to submit
@@ -93,7 +93,7 @@ export class CollectorMap<E1, E2> implements Collector<E2> {
           return { done: true, value: undefined as any };
         }
         return { done: false, value: f(result.value) };
-      }
+      },
     };
   }
 }
@@ -126,14 +126,14 @@ export class CollectorFilterMap<E1, E2> implements Collector<E2> {
           if (result.done) {
             return { done: true, value: undefined as any };
           }
-          
+
           const mapped = f(result.value);
           if (mapped !== null && mapped !== undefined) {
             return { done: false, value: mapped };
           }
           // If mapped is null or undefined, continue to the next item
         }
-      }
+      },
     };
   }
 }

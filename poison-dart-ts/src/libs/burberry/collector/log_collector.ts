@@ -5,11 +5,11 @@
 
 import { Collector, CollectorStream } from '../types';
 import { logger } from '../utils/logger';
-import { 
-  createPublicClient, 
-  http, 
-  webSocket, 
-  type PublicClient, 
+import {
+  createPublicClient,
+  http,
+  webSocket,
+  type PublicClient,
   type Chain,
   type Log,
   type Address,
@@ -61,9 +61,9 @@ export class LogCollector implements Collector<Log> {
       pollingIntervalMs: 1000,
       maxQueueSize: 1000,
       blockRange: 100,
-      ...config
+      ...config,
     };
-    
+
     // Determine if the client uses WebSocket transport
     this.isWebSocket = (this.client.transport as any)?.type === 'webSocket';
   }
@@ -76,10 +76,15 @@ export class LogCollector implements Collector<Log> {
    * @param config Configuration options
    * @returns A new LogCollector
    */
-  static withWebSocket(url: string, chain: Chain, filter: LogFilter, config: LogCollectorConfig = {}): LogCollector {
+  static withWebSocket(
+    url: string,
+    chain: Chain,
+    filter: LogFilter,
+    config: LogCollectorConfig = {}
+  ): LogCollector {
     const client = createPublicClient({
       transport: webSocket(url),
-      chain
+      chain,
     });
     return new LogCollector(client, filter, config);
   }
@@ -92,16 +97,21 @@ export class LogCollector implements Collector<Log> {
    * @param config Configuration options
    * @returns A new LogCollector
    */
-  static withHttp(url: string, chain: Chain, filter: LogFilter, config: LogCollectorConfig = {}): LogCollector {
+  static withHttp(
+    url: string,
+    chain: Chain,
+    filter: LogFilter,
+    config: LogCollectorConfig = {}
+  ): LogCollector {
     const client = createPublicClient({
       transport: http(url),
-      chain
+      chain,
     });
     return new LogCollector(client, filter, config);
   }
 
   name(): string {
-    return "LogCollector";
+    return 'LogCollector';
   }
 
   async getEventStream(): Promise<CollectorStream<Log>> {
@@ -113,48 +123,53 @@ export class LogCollector implements Collector<Log> {
 
     if (this.isWebSocket) {
       // Use WebSocket subscription for real-time logs
-      logger.info("Using WebSocket subscription for logs");
-      
+      logger.info('Using WebSocket subscription for logs');
+
       let intervalId: NodeJS.Timeout | null = null;
       let abortController = new AbortController();
       let isPolling = false;
-      
+
       try {
         // Create a filter ID for the logs
         const filterId = await this.client.createEventFilter({
-          ...this.filter
+          ...this.filter,
         });
-        
+
         // Set up a polling mechanism for the filter
         const pollFilterChanges = async () => {
           // Skip if already polling or done
-          if (isPolling || done || abortController.signal.aborted || (global as any).__BURBERRY_FORCED_SHUTDOWN__) {
+          if (
+            isPolling ||
+            done ||
+            abortController.signal.aborted ||
+            (global as any).__BURBERRY_FORCED_SHUTDOWN__
+          ) {
             return;
           }
-          
+
           isPolling = true;
-          
+
           try {
             // Check if we're done before making any API calls
             if (done || abortController.signal.aborted) {
               isPolling = false;
               return;
             }
-            
+
             const logs = await this.client.getFilterChanges({ filter: filterId });
-            
+
             // Check if we're done before processing logs
             if (done || abortController.signal.aborted) {
               isPolling = false;
               return;
             }
-            
+
             for (const log of logs as Log[]) {
               // Check if we're done before processing each log
               if (done || abortController.signal.aborted) {
                 break;
               }
-              
+
               if (resolvers.length > 0) {
                 // If there are waiting resolvers, resolve one with the log
                 const resolve = resolvers.shift()!;
@@ -162,7 +177,7 @@ export class LogCollector implements Collector<Log> {
               } else {
                 // Otherwise, add the log to the queue
                 queue.push(log);
-                
+
                 // Limit queue size
                 if (queue.length > this.config.maxQueueSize!) {
                   queue.shift();
@@ -175,57 +190,57 @@ export class LogCollector implements Collector<Log> {
               isPolling = false;
               return;
             }
-            
+
             logger.error(`Error polling filter changes: ${error}`);
           } finally {
             isPolling = false;
           }
         };
-        
+
         // Start the polling interval
         intervalId = setInterval(pollFilterChanges, 1000);
-        
+
         // Function to clean up
         cleanupFn = () => {
           logger.debug(`Cleaning up LogCollector WebSocket resources`);
-          
+
           if (intervalId) {
             clearInterval(intervalId);
             intervalId = null;
           }
-          
+
           // Abort any in-flight requests
           abortController.abort();
-          
+
           // Create a new abort controller for any future requests
           abortController = new AbortController();
-          
+
           // Uninstall the filter
-          this.client.uninstallFilter({ filter: filterId }).catch(error => {
+          this.client.uninstallFilter({ filter: filterId }).catch((error) => {
             logger.error(`Error uninstalling filter: ${error}`);
           });
-          
+
           // Mark as done
           done = true;
-          
+
           // Resolve any waiting resolvers with done
           for (const resolver of resolvers) {
             resolver({ done: true, value: undefined as any });
           }
           resolvers = [];
-          
+
           // Clear the queue
           queue.length = 0;
         };
       } catch (error) {
         logger.error(`Failed to set up WebSocket subscription: ${error}`);
         // Fall back to polling if subscription fails
-        logger.warn("Falling back to polling for logs");
+        logger.warn('Falling back to polling for logs');
         return this.getPollingEventStream();
       }
     } else {
       // Use polling for HTTP transport
-      logger.info("Using polling for logs");
+      logger.info('Using polling for logs');
       return this.getPollingEventStream();
     }
 
@@ -242,18 +257,18 @@ export class LogCollector implements Collector<Log> {
         }
 
         // Otherwise, wait for a log
-        return new Promise<IteratorResult<Log>>(resolve => {
+        return new Promise<IteratorResult<Log>>((resolve) => {
           resolvers.push(resolve);
         });
       },
-      
+
       // Clean up when the iterator is done
       async return(): Promise<IteratorResult<Log>> {
         if (cleanupFn) {
           cleanupFn();
         }
         return { done: true, value: undefined as any };
-      }
+      },
     };
   }
 
@@ -267,7 +282,7 @@ export class LogCollector implements Collector<Log> {
     let done = false;
     let intervalId: NodeJS.Timeout | null = null;
     let abortController = new AbortController();
-    
+
     // Initialize the last processed block
     if (!this.lastProcessedBlock) {
       try {
@@ -284,54 +299,60 @@ export class LogCollector implements Collector<Log> {
     let currentInterval = this.config.pollingIntervalMs!;
     let consecutiveErrors = 0;
     let isPolling = false; // Flag to prevent concurrent polling
-    
+
     const pollLogs = async () => {
       // Skip if already polling or done
-      if (isPolling || done || abortController.signal.aborted || (global as any).__BURBERRY_FORCED_SHUTDOWN__) {
+      if (
+        isPolling ||
+        done ||
+        abortController.signal.aborted ||
+        (global as any).__BURBERRY_FORCED_SHUTDOWN__
+      ) {
         return;
       }
-      
+
       isPolling = true;
-      
+
       try {
         // Check if we're done before making any API calls
         if (done || abortController.signal.aborted) {
           isPolling = false;
           return;
         }
-        
+
         // Get the latest block number
         const latestBlock = await this.client.getBlockNumber();
-        
+
         // Skip if no new blocks
         if (latestBlock <= this.lastProcessedBlock!) {
           isPolling = false;
           return;
         }
-        
+
         // Calculate the range to fetch
         // Don't fetch more than blockRange blocks at once to avoid timeouts
         const fromBlock = this.lastProcessedBlock! + BigInt(1);
-        const toBlock = latestBlock < fromBlock + BigInt(this.config.blockRange!)
-          ? latestBlock
-          : fromBlock + BigInt(this.config.blockRange! - 1);
-        
+        const toBlock =
+          latestBlock < fromBlock + BigInt(this.config.blockRange!)
+            ? latestBlock
+            : fromBlock + BigInt(this.config.blockRange! - 1);
+
         // Check again if we're done before making the getLogs call
         if (done || abortController.signal.aborted) {
           isPolling = false;
           return;
         }
-        
+
         // Get logs for the block range
         const logs = await this.client.getLogs({
           ...this.filter,
           fromBlock,
-          toBlock
+          toBlock,
         });
-        
+
         // Update the last processed block
         this.lastProcessedBlock = toBlock;
-        
+
         // Reset backoff on success
         if (consecutiveErrors > 0) {
           consecutiveErrors = 0;
@@ -341,29 +362,39 @@ export class LogCollector implements Collector<Log> {
             intervalId = setInterval(pollLogs, currentInterval);
           }
         }
-        
+
         // Check again if we're done before processing logs
         if (done || abortController.signal.aborted) {
           isPolling = false;
           return;
         }
-        
+
         // Check again if we're done before processing logs
-        if (done || abortController.signal.aborted || (global as any).__BURBERRY_FORCED_SHUTDOWN__) {
+        if (
+          done ||
+          abortController.signal.aborted ||
+          (global as any).__BURBERRY_FORCED_SHUTDOWN__
+        ) {
           isPolling = false;
           return;
         }
-        
+
         // Process the logs
-        logger.debug(`Processed logs from blocks ${fromBlock} to ${toBlock}, found ${logs.length} logs`);
-        
+        logger.debug(
+          `Processed logs from blocks ${fromBlock} to ${toBlock}, found ${logs.length} logs`
+        );
+
         for (const log of logs) {
           // Check if we're done before processing each log
-          if (done || abortController.signal.aborted || (global as any).__BURBERRY_FORCED_SHUTDOWN__) {
+          if (
+            done ||
+            abortController.signal.aborted ||
+            (global as any).__BURBERRY_FORCED_SHUTDOWN__
+          ) {
             isPolling = false;
             return;
           }
-          
+
           if (resolvers.length > 0) {
             // If there are waiting resolvers, resolve one with the log
             const resolve = resolvers.shift()!;
@@ -371,7 +402,7 @@ export class LogCollector implements Collector<Log> {
           } else {
             // Otherwise, add the log to the queue
             queue.push(log);
-            
+
             // Limit queue size
             if (queue.length > this.config.maxQueueSize!) {
               queue.shift();
@@ -384,9 +415,9 @@ export class LogCollector implements Collector<Log> {
           isPolling = false;
           return;
         }
-        
+
         logger.error(`Error in LogCollector: ${error}`);
-        
+
         // Implement exponential backoff
         consecutiveErrors++;
         if (consecutiveErrors > 3) {
@@ -404,7 +435,7 @@ export class LogCollector implements Collector<Log> {
         isPolling = false;
       }
     };
-    
+
     // Start the polling interval
     intervalId = setInterval(pollLogs, currentInterval);
 
@@ -415,28 +446,28 @@ export class LogCollector implements Collector<Log> {
         clearInterval(intervalId);
         intervalId = null;
       }
-      
+
       // Abort any in-flight requests
       abortController.abort();
-      
+
       // Create a new abort controller for any future requests
       abortController = new AbortController();
-      
+
       // Mark as done
       done = true;
-      
+
       // Resolve any waiting resolvers with done
       for (const resolver of resolvers) {
         resolver({ done: true, value: undefined as any });
       }
       resolvers = [];
-      
+
       // Clear the queue
       queue.length = 0;
-      
+
       // Set the global forced shutdown flag to ensure any in-progress operations stop
       (global as any).__BURBERRY_FORCED_SHUTDOWN__ = true;
-      
+
       // Clear any pending API calls or timeouts
       if (this.lastProcessedBlock) {
         // Reset the last processed block to prevent further processing
@@ -457,16 +488,16 @@ export class LogCollector implements Collector<Log> {
         }
 
         // Otherwise, wait for a log
-        return new Promise<IteratorResult<Log>>(resolve => {
+        return new Promise<IteratorResult<Log>>((resolve) => {
           resolvers.push(resolve);
         });
       },
-      
+
       // Clean up when the iterator is done
       async return(): Promise<IteratorResult<Log>> {
         cleanup();
         return { done: true, value: undefined as any };
-      }
+      },
     };
   }
 }

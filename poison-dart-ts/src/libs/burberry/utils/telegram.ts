@@ -147,7 +147,9 @@ export class TelegramClient {
 
       if (!response.ok) {
         const body = await response.text();
-        logger.error(`Failed to send error report to Telegram: Response status: ${response.status}, body: ${body}`);
+        logger.error(
+          `Failed to send error report to Telegram: Response status: ${response.status}, body: ${body}`
+        );
       }
     } catch (e) {
       logger.error(`Failed to send error report to Telegram: ${e}`);
@@ -159,7 +161,10 @@ export class TelegramClient {
    * @param text The text to send
    * @returns A message object
    */
-  createMessage(text: string, options: Partial<Omit<TelegramMessage, 'botToken' | 'chatId' | 'text'>> = {}): TelegramMessage {
+  createMessage(
+    text: string,
+    options: Partial<Omit<TelegramMessage, 'botToken' | 'chatId' | 'text'>> = {}
+  ): TelegramMessage {
     return {
       botToken: this.config.botToken,
       chatId: this.config.chatId,
@@ -179,6 +184,6 @@ export function escapeMarkdown(raw: string): string {
   const escapedCharacters = '\\*_[]~`>#-|{}.!+()=';
   return raw
     .split('')
-    .map(c => (escapedCharacters.includes(c) ? `\\${c}` : c))
+    .map((c) => (escapedCharacters.includes(c) ? `\\${c}` : c))
     .join('');
 }

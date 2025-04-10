@@ -5,14 +5,14 @@
 
 import { Collector, CollectorStream } from '../types';
 import { logger } from '../utils/logger';
-import { 
-  createPublicClient, 
-  http, 
-  webSocket, 
-  type PublicClient, 
+import {
+  createPublicClient,
+  http,
+  webSocket,
+  type PublicClient,
   type Chain,
   type Block,
-  type Transport
+  type Transport,
 } from 'viem';
 
 /**
@@ -46,9 +46,9 @@ export class BlockCollector implements Collector<Block> {
       pollingIntervalMs: 1000,
       maxQueueSize: 100,
       includeTransactions: false,
-      ...config
+      ...config,
     };
-    
+
     // Determine if the client uses WebSocket transport
     this.isWebSocket = (this.client.transport as any)?.type === 'webSocket';
   }
@@ -60,10 +60,14 @@ export class BlockCollector implements Collector<Block> {
    * @param config Configuration options
    * @returns A new BlockCollector
    */
-  static withWebSocket(url: string, chain: Chain, config: BlockCollectorConfig = {}): BlockCollector {
+  static withWebSocket(
+    url: string,
+    chain: Chain,
+    config: BlockCollectorConfig = {}
+  ): BlockCollector {
     const client = createPublicClient({
       transport: webSocket(url),
-      chain
+      chain,
     });
     return new BlockCollector(client, config);
   }
@@ -78,13 +82,13 @@ export class BlockCollector implements Collector<Block> {
   static withHttp(url: string, chain: Chain, config: BlockCollectorConfig = {}): BlockCollector {
     const client = createPublicClient({
       transport: http(url),
-      chain
+      chain,
     });
     return new BlockCollector(client, config);
   }
 
   name(): string {
-    return "BlockCollector";
+    return 'BlockCollector';
   }
 
   async getEventStream(): Promise<CollectorStream<Block>> {
@@ -97,22 +101,26 @@ export class BlockCollector implements Collector<Block> {
 
     if (this.isWebSocket) {
       // Use WebSocket subscription for real-time blocks
-      logger.info("Using WebSocket subscription for blocks");
-      
+      logger.info('Using WebSocket subscription for blocks');
+
       let abortController = new AbortController();
-      
+
       try {
         const unwatch = await this.client.watchBlocks({
           onBlock: (block) => {
             // Check if we're done before processing the block
-            if (done || abortController.signal.aborted || (global as any).__BURBERRY_FORCED_SHUTDOWN__) {
+            if (
+              done ||
+              abortController.signal.aborted ||
+              (global as any).__BURBERRY_FORCED_SHUTDOWN__
+            ) {
               return;
             }
-            
+
             // Only process if it's a new block
             if (lastBlockNumber === null || block.number! > lastBlockNumber) {
               lastBlockNumber = block.number!;
-              
+
               if (resolvers.length > 0) {
                 // If there are waiting resolvers, resolve one with the block
                 const resolve = resolvers.shift()!;
@@ -120,7 +128,7 @@ export class BlockCollector implements Collector<Block> {
               } else {
                 // Otherwise, add the block to the queue
                 queue.push(block);
-                
+
                 // Limit queue size
                 if (queue.length > this.config.maxQueueSize!) {
                   queue.shift();
@@ -129,42 +137,42 @@ export class BlockCollector implements Collector<Block> {
               }
             }
           },
-          includeTransactions: this.config.includeTransactions
+          includeTransactions: this.config.includeTransactions,
         });
-        
+
         cleanupFn = () => {
           logger.debug(`Cleaning up BlockCollector WebSocket resources`);
-          
+
           // Abort any in-flight requests
           abortController.abort();
-          
+
           // Create a new abort controller for any future requests
           abortController = new AbortController();
-          
+
           // Unwatch blocks
           unwatch();
-          
+
           // Mark as done
           done = true;
-          
+
           // Resolve any waiting resolvers with done
           for (const resolver of resolvers) {
             resolver({ done: true, value: undefined as any });
           }
           resolvers = [];
-          
+
           // Clear the queue
           queue.length = 0;
         };
       } catch (error) {
         logger.error(`Failed to set up WebSocket subscription: ${error}`);
         // Fall back to polling if subscription fails
-        logger.warn("Falling back to polling for blocks");
+        logger.warn('Falling back to polling for blocks');
         return this.getPollingEventStream();
       }
     } else {
       // Use polling for HTTP transport
-      logger.info("Using polling for blocks");
+      logger.info('Using polling for blocks');
       return this.getPollingEventStream();
     }
 
@@ -181,18 +189,18 @@ export class BlockCollector implements Collector<Block> {
         }
 
         // Otherwise, wait for a block
-        return new Promise<IteratorResult<Block>>(resolve => {
+        return new Promise<IteratorResult<Block>>((resolve) => {
           resolvers.push(resolve);
         });
       },
-      
+
       // Clean up when the iterator is done
       async return(): Promise<IteratorResult<Block>> {
         if (cleanupFn) {
           cleanupFn();
         }
         return { done: true, value: undefined as any };
-      }
+      },
     };
   }
 
@@ -212,27 +220,32 @@ export class BlockCollector implements Collector<Block> {
     // Create a polling mechanism for blocks with exponential backoff
     let currentInterval = this.config.pollingIntervalMs!;
     let consecutiveErrors = 0;
-    
+
     const pollBlock = async () => {
       // Skip if already polling or done
-      if (isPolling || done || abortController.signal.aborted || (global as any).__BURBERRY_FORCED_SHUTDOWN__) {
+      if (
+        isPolling ||
+        done ||
+        abortController.signal.aborted ||
+        (global as any).__BURBERRY_FORCED_SHUTDOWN__
+      ) {
         return;
       }
-      
+
       isPolling = true;
-      
+
       try {
         // Check if we're done before making any API calls
         if (done || abortController.signal.aborted) {
           isPolling = false;
           return;
         }
-        
+
         // Get the latest block
         const block = await this.client.getBlock({
-          includeTransactions: this.config.includeTransactions
+          includeTransactions: this.config.includeTransactions,
         });
-        
+
         // Reset backoff on success
         if (consecutiveErrors > 0) {
           consecutiveErrors = 0;
@@ -242,17 +255,17 @@ export class BlockCollector implements Collector<Block> {
             intervalId = setInterval(pollBlock, currentInterval);
           }
         }
-        
+
         // Check if we're done before processing the block
         if (done || abortController.signal.aborted) {
           isPolling = false;
           return;
         }
-        
+
         // Only process if it's a new block
         if (lastBlockNumber === null || block.number > lastBlockNumber) {
           lastBlockNumber = block.number;
-          
+
           if (resolvers.length > 0) {
             // If there are waiting resolvers, resolve one with the block
             const resolve = resolvers.shift()!;
@@ -260,7 +273,7 @@ export class BlockCollector implements Collector<Block> {
           } else {
             // Otherwise, add the block to the queue
             queue.push(block);
-            
+
             // Limit queue size
             if (queue.length > this.config.maxQueueSize!) {
               queue.shift();
@@ -273,9 +286,9 @@ export class BlockCollector implements Collector<Block> {
           isPolling = false;
           return;
         }
-        
+
         logger.error(`Error in BlockCollector: ${error}`);
-        
+
         // Implement exponential backoff
         consecutiveErrors++;
         if (consecutiveErrors > 3) {
@@ -293,37 +306,37 @@ export class BlockCollector implements Collector<Block> {
         isPolling = false;
       }
     };
-    
+
     // Start the polling interval
     intervalId = setInterval(pollBlock, currentInterval);
 
     // Function to clean up
     const cleanup = () => {
       logger.debug(`Cleaning up BlockCollector polling resources`);
-      
+
       if (intervalId) {
         clearInterval(intervalId);
         intervalId = null;
       }
-      
+
       // Abort any in-flight requests
       abortController.abort();
-      
+
       // Create a new abort controller for any future requests
       abortController = new AbortController();
-      
+
       // Mark as done
       done = true;
-      
+
       // Resolve any waiting resolvers with done
       for (const resolver of resolvers) {
         resolver({ done: true, value: undefined as any });
       }
       resolvers = [];
-      
+
       // Clear the queue
       queue.length = 0;
-      
+
       // Set the global forced shutdown flag to ensure any in-progress operations stop
       (global as any).__BURBERRY_FORCED_SHUTDOWN__ = true;
     };
@@ -341,16 +354,16 @@ export class BlockCollector implements Collector<Block> {
         }
 
         // Otherwise, wait for a block
-        return new Promise<IteratorResult<Block>>(resolve => {
+        return new Promise<IteratorResult<Block>>((resolve) => {
           resolvers.push(resolve);
         });
       },
-      
+
       // Clean up when the iterator is done
       async return(): Promise<IteratorResult<Block>> {
         cleanup();
         return { done: true, value: undefined as any };
-      }
+      },
     };
   }
 }

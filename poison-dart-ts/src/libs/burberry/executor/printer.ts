@@ -21,7 +21,7 @@ export class PrinterExecutor<A> implements Executor<A> {
   }
 
   name(): string {
-    return "PrinterExecutor";
+    return 'PrinterExecutor';
   }
 
   /**

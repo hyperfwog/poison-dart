@@ -10,16 +10,12 @@
     "test": "bun test",
     "example": "bun examples/simple.ts",
     "example:hyperevm": "bun examples/hyperevm.ts",
-    "prepare": "bun run build"
+    "prepare": "bun run build",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check --apply ."
   },
-  "keywords": [
-    "trading",
-    "bot",
-    "framework",
-    "event-driven",
-    "typescript",
-    "bun"
-  ],
+  "keywords": ["trading", "bot", "framework", "event-driven", "typescript", "bun"],
   "author": "",
   "license": "MIT",
   "repository": {
@@ -31,8 +27,9 @@
   },
   "homepage": "https://github.com/username/frogberry#readme",
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/bun": "latest"
+    "@biomejs/biome": "^1.9.4",
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
   },
   "peerDependencies": {
     "viem": "^1.0.0"
@@ -42,9 +39,5 @@
       "optional": true
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ]
+  "files": ["dist", "README.md", "LICENSE"]
 }

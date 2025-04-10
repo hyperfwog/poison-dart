@@ -5,7 +5,12 @@
 
 import { ActionChannelSubmitter } from './action_submitter';
 import { Collector, Executor, Strategy } from './types';
-import { BroadcastChannel, BroadcastChannelConfig, ChannelError, ChannelErrorType } from './utils/broadcast_channel';
+import {
+  BroadcastChannel,
+  BroadcastChannelConfig,
+  ChannelError,
+  ChannelErrorType,
+} from './utils/broadcast_channel';
 import { logger } from './utils/logger';
 
 /**
@@ -53,17 +58,17 @@ export class Engine<E, A> {
       actionChannelCapacity: 512,
       eventChannelConfig: {
         throwOnLag: false,
-        lagReportInterval: 100
+        lagReportInterval: 100,
       },
       actionChannelConfig: {
         throwOnLag: false,
-        lagReportInterval: 100
+        lagReportInterval: 100,
       },
       maxConsecutiveErrors: 5,
       initialBackoffMs: 100,
       maxBackoffMs: 30000,
       stopOnCriticalError: false,
-      ...config
+      ...config,
     };
   }
 
@@ -92,7 +97,7 @@ export class Engine<E, A> {
   withEventChannelConfig(config: BroadcastChannelConfig): Engine<E, A> {
     this.config.eventChannelConfig = {
       ...this.config.eventChannelConfig,
-      ...config
+      ...config,
     };
     return this;
   }
@@ -104,7 +109,7 @@ export class Engine<E, A> {
   withActionChannelConfig(config: BroadcastChannelConfig): Engine<E, A> {
     this.config.actionChannelConfig = {
       ...this.config.actionChannelConfig,
-      ...config
+      ...config,
     };
     return this;
   }
@@ -175,9 +180,9 @@ export class Engine<E, A> {
    */
   async runAndJoin(): Promise<void> {
     const tasks = await this.run();
-    
+
     // Wait for all tasks to complete
-    await Promise.all(tasks).catch(err => {
+    await Promise.all(tasks).catch((err) => {
       logger.error(`Task terminated unexpectedly: ${err}`);
     });
   }
@@ -191,66 +196,65 @@ export class Engine<E, A> {
     if (!this.running) {
       return;
     }
-    
-    logger.info("Stopping engine...");
-    
+
+    logger.info('Stopping engine...');
+
     // Set running to false first to prevent new operations
     this.running = false;
-    
+
     // Create a promise that resolves after the timeout
-    const timeoutPromise = new Promise<void>(resolve => {
+    const timeoutPromise = new Promise<void>((resolve) => {
       setTimeout(() => {
         logger.warn(`Engine shutdown timed out after ${timeoutMs}ms, forcing shutdown`);
-        
+
         // Force cleanup of any remaining resources
         this.forceCleanup();
-        
+
         resolve();
       }, timeoutMs);
     });
-    
+
     // Create a promise that resolves when all tasks have completed
-    const shutdownPromise = new Promise<void>(async resolve => {
+    const shutdownPromise = new Promise<void>(async (resolve) => {
       try {
         // Close the channels to signal tasks to stop
         if (this.eventChannel) {
           this.eventChannel.close();
         }
-        
+
         if (this.actionChannel) {
           this.actionChannel.close();
         }
-        
+
         // Wait a short time for tasks to notice the channels are closed
-        await new Promise(r => setTimeout(r, 100));
-        
+        await new Promise((r) => setTimeout(r, 100));
+
         // Try to wait for all tasks to complete with a shorter timeout
         const taskTimeout = Math.min(timeoutMs / 2, 2000);
         await Promise.race([
-          Promise.all(this.tasks.map(task => {
-            // Create a timeout for each task
-            return Promise.race([
-              task,
-              new Promise(r => setTimeout(r, taskTimeout))
-            ]);
-          })),
-          new Promise(r => setTimeout(r, taskTimeout))
+          Promise.all(
+            this.tasks.map((task) => {
+              // Create a timeout for each task
+              return Promise.race([task, new Promise((r) => setTimeout(r, taskTimeout))]);
+            })
+          ),
+          new Promise((r) => setTimeout(r, taskTimeout)),
         ]);
-        
+
         resolve();
       } catch (e) {
         logger.error(`Error during engine shutdown: ${e}`);
         resolve();
       }
     });
-    
+
     // Wait for either the shutdown to complete or the timeout to expire
     await Promise.race([shutdownPromise, timeoutPromise]);
-    
+
     // Ensure all resources are cleaned up
     this.cleanupResources();
   }
-  
+
   /**
    * Clean up resources
    */
@@ -259,7 +263,7 @@ export class Engine<E, A> {
     this.actionChannel = undefined;
     this.tasks = [];
   }
-  
+
   /**
    * Force cleanup of any remaining resources
    * This is called when the shutdown times out
@@ -267,11 +271,11 @@ export class Engine<E, A> {
   private forceCleanup(): void {
     // Ensure all resources are cleaned up
     this.cleanupResources();
-    
+
     // Set global state to indicate forced shutdown
     // This will be checked by collectors and other components
     (global as any).__FROGBERRY_FORCED_SHUTDOWN__ = true;
-    
+
     // After a short delay, reset the forced shutdown flag
     setTimeout(() => {
       (global as any).__FROGBERRY_FORCED_SHUTDOWN__ = false;
@@ -284,22 +288,22 @@ export class Engine<E, A> {
   async run(): Promise<Promise<void>[]> {
     // Validate that we have executors, collectors, and strategies
     if (this.executors.length === 0) {
-      throw new Error("No executors");
+      throw new Error('No executors');
     }
 
     if (this.collectors.length === 0) {
-      throw new Error("No collectors");
+      throw new Error('No collectors');
     }
 
     if (this.strategies.length === 0) {
-      throw new Error("No strategies");
+      throw new Error('No strategies');
     }
-    
+
     // Check if the engine is already running
     if (this.running) {
-      throw new Error("Engine is already running");
+      throw new Error('Engine is already running');
     }
-    
+
     this.running = true;
 
     // Create broadcast channels for events and actions
@@ -307,7 +311,7 @@ export class Engine<E, A> {
       this.config.eventChannelCapacity,
       this.config.eventChannelConfig
     );
-    
+
     this.actionChannel = new BroadcastChannel<A>(
       this.config.actionChannelCapacity,
       this.config.actionChannelConfig
@@ -318,7 +322,7 @@ export class Engine<E, A> {
     // Spawn executors
     for (const executor of this.executors) {
       const receiver = this.actionChannel.subscribe();
-      
+
       this.tasks.push(this.runExecutor(executor, receiver));
     }
 
@@ -354,7 +358,7 @@ export class Engine<E, A> {
    */
   private async runExecutor(executor: Executor<A>, receiver: AsyncIterator<A>): Promise<void> {
     logger.debug(`Starting executor: ${executor.name()}`);
-    
+
     let consecutiveErrors = 0;
     let backoffMs = this.config.initialBackoffMs;
 
@@ -362,14 +366,14 @@ export class Engine<E, A> {
       while (this.running) {
         try {
           const result = await receiver.next();
-          
+
           if (result.done) {
             logger.debug(`Action stream ended for ${executor.name()}`);
             break;
           }
-          
+
           await executor.execute(result.value);
-          
+
           // Reset backoff on success
           if (consecutiveErrors > 0) {
             consecutiveErrors = 0;
@@ -377,7 +381,7 @@ export class Engine<E, A> {
           }
         } catch (e) {
           consecutiveErrors++;
-          
+
           if (e instanceof ChannelError) {
             if (e.type === ChannelErrorType.CLOSED) {
               logger.debug(`Action channel closed for ${executor.name()}`);
@@ -390,22 +394,29 @@ export class Engine<E, A> {
           } else {
             logger.error(`Error executing action in ${executor.name()}: ${e}`);
           }
-          
+
           // Implement exponential backoff
           if (consecutiveErrors > this.config.maxConsecutiveErrors) {
             const newBackoff = Math.min(backoffMs * 2, this.config.maxBackoffMs);
             if (newBackoff !== backoffMs) {
               backoffMs = newBackoff;
-              logger.warn(`Increasing backoff for ${executor.name()} to ${backoffMs}ms due to errors`);
+              logger.warn(
+                `Increasing backoff for ${executor.name()} to ${backoffMs}ms due to errors`
+              );
             }
-            
+
             // Sleep for backoff period
-            await new Promise(resolve => setTimeout(resolve, backoffMs));
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
           }
-          
+
           // Stop the engine on critical error if configured to do so
-          if (this.config.stopOnCriticalError && consecutiveErrors > this.config.maxConsecutiveErrors * 2) {
-            logger.error(`Too many consecutive errors in executor ${executor.name()}, stopping engine`);
+          if (
+            this.config.stopOnCriticalError &&
+            consecutiveErrors > this.config.maxConsecutiveErrors * 2
+          ) {
+            logger.error(
+              `Too many consecutive errors in executor ${executor.name()}, stopping engine`
+            );
             await this.stop();
             break;
           }
@@ -414,7 +425,7 @@ export class Engine<E, A> {
     } catch (e) {
       logger.error(`Unexpected error in executor ${executor.name()}: ${e}`);
     }
-    
+
     logger.debug(`Executor ${executor.name()} stopped`);
   }
 
@@ -425,12 +436,12 @@ export class Engine<E, A> {
    * @param actionSubmitter The submitter to submit actions to
    */
   private async runStrategy(
-    strategy: Strategy<E, A>, 
+    strategy: Strategy<E, A>,
     eventReceiver: AsyncIterator<E>,
     actionSubmitter: ActionChannelSubmitter<A>
   ): Promise<void> {
     logger.debug(`Starting strategy: ${strategy.name()}`);
-    
+
     let consecutiveErrors = 0;
     let backoffMs = this.config.initialBackoffMs;
 
@@ -438,14 +449,14 @@ export class Engine<E, A> {
       while (this.running) {
         try {
           const result = await eventReceiver.next();
-          
+
           if (result.done) {
             logger.debug(`Event stream ended for ${strategy.name()}`);
             break;
           }
-          
+
           await strategy.processEvent(result.value, actionSubmitter);
-          
+
           // Reset backoff on success
           if (consecutiveErrors > 0) {
             consecutiveErrors = 0;
@@ -453,7 +464,7 @@ export class Engine<E, A> {
           }
         } catch (e) {
           consecutiveErrors++;
-          
+
           if (e instanceof ChannelError) {
             if (e.type === ChannelErrorType.CLOSED) {
               logger.debug(`Event channel closed for ${strategy.name()}`);
@@ -466,22 +477,29 @@ export class Engine<E, A> {
           } else {
             logger.error(`Error processing event in ${strategy.name()}: ${e}`);
           }
-          
+
           // Exponential backoff
           if (consecutiveErrors > this.config.maxConsecutiveErrors) {
             const newBackoff = Math.min(backoffMs * 2, this.config.maxBackoffMs);
             if (newBackoff !== backoffMs) {
               backoffMs = newBackoff;
-              logger.warn(`Increasing backoff for ${strategy.name()} to ${backoffMs}ms due to errors`);
+              logger.warn(
+                `Increasing backoff for ${strategy.name()} to ${backoffMs}ms due to errors`
+              );
             }
-            
+
             // Sleep for backoff period
-            await new Promise(resolve => setTimeout(resolve, backoffMs));
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
           }
-          
+
           // Stop the engine on critical error if configured to do so
-          if (this.config.stopOnCriticalError && consecutiveErrors > this.config.maxConsecutiveErrors * 2) {
-            logger.error(`Too many consecutive errors in strategy ${strategy.name()}, stopping engine`);
+          if (
+            this.config.stopOnCriticalError &&
+            consecutiveErrors > this.config.maxConsecutiveErrors * 2
+          ) {
+            logger.error(
+              `Too many consecutive errors in strategy ${strategy.name()}, stopping engine`
+            );
             await this.stop();
             break;
           }
@@ -490,7 +508,7 @@ export class Engine<E, A> {
     } catch (e) {
       logger.error(`Unexpected error in strategy ${strategy.name()}: ${e}`);
     }
-    
+
     logger.debug(`Strategy ${strategy.name()} stopped`);
   }
 
@@ -500,26 +518,26 @@ export class Engine<E, A> {
    */
   private async runCollector(collector: Collector<E>): Promise<void> {
     logger.debug(`Starting collector: ${collector.name()}`);
-    
+
     let consecutiveErrors = 0;
     let backoffMs = this.config.initialBackoffMs;
 
     try {
       const eventStream = await collector.getEventStream();
-      
+
       while (this.running) {
         try {
           const result = await eventStream.next();
-          
+
           if (result.done) {
             logger.debug(`Event stream ended for ${collector.name()}`);
             break;
           }
-          
+
           if (this.eventChannel) {
             this.eventChannel.send(result.value);
           }
-          
+
           // Reset backoff on success
           if (consecutiveErrors > 0) {
             consecutiveErrors = 0;
@@ -527,7 +545,7 @@ export class Engine<E, A> {
           }
         } catch (e) {
           consecutiveErrors++;
-          
+
           if (e instanceof ChannelError) {
             if (e.type === ChannelErrorType.CLOSED) {
               logger.debug(`Event channel closed for ${collector.name()}`);
@@ -538,22 +556,29 @@ export class Engine<E, A> {
           } else {
             logger.error(`Error in collector ${collector.name()}: ${e}`);
           }
-          
+
           // Implement exponential backoff
           if (consecutiveErrors > this.config.maxConsecutiveErrors) {
             const newBackoff = Math.min(backoffMs * 2, this.config.maxBackoffMs);
             if (newBackoff !== backoffMs) {
               backoffMs = newBackoff;
-              logger.warn(`Increasing backoff for ${collector.name()} to ${backoffMs}ms due to errors`);
+              logger.warn(
+                `Increasing backoff for ${collector.name()} to ${backoffMs}ms due to errors`
+              );
             }
-            
+
             // Sleep for backoff period
-            await new Promise(resolve => setTimeout(resolve, backoffMs));
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
           }
-          
+
           // Stop the engine on critical error if configured to do so
-          if (this.config.stopOnCriticalError && consecutiveErrors > this.config.maxConsecutiveErrors * 2) {
-            logger.error(`Too many consecutive errors in collector ${collector.name()}, stopping engine`);
+          if (
+            this.config.stopOnCriticalError &&
+            consecutiveErrors > this.config.maxConsecutiveErrors * 2
+          ) {
+            logger.error(
+              `Too many consecutive errors in collector ${collector.name()}, stopping engine`
+            );
             await this.stop();
             break;
           }
@@ -562,7 +587,7 @@ export class Engine<E, A> {
     } catch (e) {
       logger.error(`Error in collector ${collector.name()}: ${e}`);
     }
-    
+
     logger.debug(`Collector ${collector.name()} stopped`);
   }
 }

@@ -31,11 +31,14 @@ export class TelegramSubmitter implements ActionSubmitter<TelegramMessage> {
    * @param config The base Telegram configuration
    * @param redirectConfig The redirection configuration
    */
-  static withRedirect(config: TelegramConfig, redirectConfig: {
-    botToken: string;
-    chatId: string;
-    threadId?: string;
-  }): TelegramSubmitter {
+  static withRedirect(
+    config: TelegramConfig,
+    redirectConfig: {
+      botToken: string;
+      chatId: string;
+      threadId?: string;
+    }
+  ): TelegramSubmitter {
     const submitter = new TelegramSubmitter(config);
     submitter.redirectConfig = redirectConfig;
     return submitter;
@@ -58,7 +61,7 @@ export class TelegramSubmitter implements ActionSubmitter<TelegramMessage> {
     }
 
     // Use a Promise instead of spawning a thread
-    this.client.sendMessage(finalMessage).catch(e => {
+    this.client.sendMessage(finalMessage).catch((e) => {
       logger.error(`Error sending message: ${e}`);
     });
   }
@@ -105,4 +108,3 @@ export class TelegramSubmitter implements ActionSubmitter<TelegramMessage> {
     }
   }
 }
-

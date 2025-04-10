@@ -10,7 +10,7 @@ import { Executor } from '../types.js';
  */
 export class Dummy<A> implements Executor<A> {
   name(): string {
-    return "Dummy";
+    return 'Dummy';
   }
 
   async execute(action: A): Promise<void> {
