@@ -1,66 +1,38 @@
 /**
  * Telegram executor for sending notifications
+ * Uses the unified TelegramClient from utils/telegram.ts
  */
 import { Executor } from '../types';
-
-/**
- * Message to be sent to Telegram
- */
-export interface Message {
-  text: string;
-  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
-  disable_web_page_preview?: boolean;
-  disable_notification?: boolean;
-}
-
-/**
- * Configuration for the Telegram executor
- */
-export interface TelegramConfig {
-  botToken: string;
-  chatId: string;
-}
+import { TelegramClient, TelegramMessage, TelegramConfig } from '../utils/telegram';
+import { logger } from '../utils/logger';
 
 /**
  * Executor for sending messages to Telegram
  */
-export class TelegramExecutor<T extends Message> implements Executor<T> {
-  private config: TelegramConfig;
+export class TelegramExecutor implements Executor<TelegramMessage> {
+  private client: TelegramClient;
 
+  /**
+   * Create a new TelegramExecutor
+   * @param config The Telegram configuration
+   */
   constructor(config: TelegramConfig) {
-    this.config = config;
+    this.client = new TelegramClient(config);
   }
 
   name(): string {
     return 'TelegramExecutor';
   }
 
-  async execute(action: T): Promise<void> {
-    const url = `https://api.telegram.org/bot${this.config.botToken}/sendMessage`;
-    
-    const body = JSON.stringify({
-      chat_id: this.config.chatId,
-      text: action.text,
-      parse_mode: action.parse_mode,
-      disable_web_page_preview: action.disable_web_page_preview,
-      disable_notification: action.disable_notification,
-    });
-
+  /**
+   * Execute a message by sending it to Telegram
+   * @param message The message to send
+   */
+  async execute(message: TelegramMessage): Promise<void> {
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Telegram API error: ${JSON.stringify(errorData)}`);
-      }
+      await this.client.sendMessage(message);
     } catch (error) {
-      console.error('Failed to send Telegram message:', error);
+      logger.error(`Failed to send Telegram message: ${error}`);
       throw error;
     }
   }

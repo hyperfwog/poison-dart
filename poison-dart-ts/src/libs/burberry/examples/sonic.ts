@@ -1,11 +1,13 @@
 /**
  * Ethereum example
- * Demonstrates how to use the Ethereum collectors
+ * Demonstrates how to use the Ethereum collectors with improved features
  */
 
-import { Engine } from '../engine';
-import { BlockCollector, LogCollector, MempoolCollector } from '../collector/mod';
-import { PrinterExecutor } from '../executor/printer';
+import { Engine, EngineConfig } from '../engine';
+import { BlockCollector, BlockCollectorConfig } from '../collector';
+import { LogCollector, LogCollectorConfig, LogFilter } from '../collector';
+import { MempoolCollector, MempoolCollectorConfig } from '../collector';
+import { PrinterExecutor } from '../executor';
 import { Strategy, ActionSubmitter } from '../types';
 import { logger, LogLevel } from '../utils/logger';
 import { mainnet } from 'viem/chains';
@@ -20,102 +22,203 @@ type Action = string;
 
 // Define a simple strategy for blocks
 class BlockStrategy implements Strategy<Block, Action> {
+  private blockCount = 0;
+  
   name(): string {
     return "BlockStrategy";
   }
 
+  async syncState(submitter: ActionSubmitter<Action>): Promise<void> {
+    logger.info("Syncing block strategy state...");
+    const result = await submitter.submitAsync("Block strategy initialized at " + new Date().toISOString());
+    if (!result.success) {
+      logger.warn(`Failed to submit initialization message: ${result.error}`);
+    }
+  }
+
   async processEvent(event: Block, submitter: ActionSubmitter<Action>): Promise<void> {
-    const message = `New block: ${event.number} with ${event.transactions.length} transactions`;
+    this.blockCount++;
+    const message = `New block #${this.blockCount}: ${event.number} with ${event.transactions.length} transactions`;
     logger.info(message);
-    submitter.submit(message);
+    
+    // Use the async submission method
+    const result = await submitter.submitAsync(message);
+    if (!result.success) {
+      logger.warn(`Failed to submit block action: ${result.error}`);
+    }
   }
 }
 
 // Define a simple strategy for logs
 class LogStrategy implements Strategy<Log, Action> {
+  private logCount = 0;
+  
   name(): string {
     return "LogStrategy";
   }
 
+  async syncState(submitter: ActionSubmitter<Action>): Promise<void> {
+    logger.info("Syncing log strategy state...");
+    const result = await submitter.submitAsync("Log strategy initialized at " + new Date().toISOString());
+    if (!result.success) {
+      logger.warn(`Failed to submit initialization message: ${result.error}`);
+    }
+  }
+
   async processEvent(event: Log, submitter: ActionSubmitter<Action>): Promise<void> {
-    const message = `New log: ${event.address} with topics ${event.topics.join(', ')}`;
+    this.logCount++;
+    const message = `New log #${this.logCount}: ${event.address} with topics ${event.topics.join(', ')}`;
     logger.info(message);
-    submitter.submit(message);
+    
+    // Use the async submission method
+    const result = await submitter.submitAsync(message);
+    if (!result.success) {
+      logger.warn(`Failed to submit log action: ${result.error}`);
+    }
   }
 }
 
 // Define a simple strategy for transactions
 class TransactionStrategy implements Strategy<Transaction, Action> {
+  private txCount = 0;
+  
   name(): string {
     return "TransactionStrategy";
   }
 
+  async syncState(submitter: ActionSubmitter<Action>): Promise<void> {
+    logger.info("Syncing transaction strategy state...");
+    const result = await submitter.submitAsync("Transaction strategy initialized at " + new Date().toISOString());
+    if (!result.success) {
+      logger.warn(`Failed to submit initialization message: ${result.error}`);
+    }
+  }
+
   async processEvent(event: Transaction, submitter: ActionSubmitter<Action>): Promise<void> {
-    const message = `New transaction: ${event.hash} from ${event.from} to ${event.to}`;
+    this.txCount++;
+    const message = `New transaction #${this.txCount}: ${event.hash} from ${event.from} to ${event.to || 'contract creation'}`;
     logger.info(message);
-    submitter.submit(message);
+    
+    // Use the async submission method
+    const result = await submitter.submitAsync(message);
+    if (!result.success) {
+      logger.warn(`Failed to submit transaction action: ${result.error}`);
+    }
   }
 }
 
 // Create and run the engines
 async function main() {
-  // Replace with your Ethereum node URL
+  // Replace with your Sonic node URL
   const nodeUrl = 'https://rpc.soniclabs.com';
+  const wsUri = 'wss://sonic.callstaticrpc.com';
 
-  // Create a block engine
-  const blockEngine = new Engine<Block, Action>();
-  blockEngine.addCollector(BlockCollector.withHttp(nodeUrl, mainnet));
-  blockEngine.addStrategy(new BlockStrategy());
-  blockEngine.addExecutor(new PrinterExecutor<Action>());
+  // Common engine configuration
+  const engineConfig: EngineConfig = {
+    eventChannelCapacity: 100,
+    actionChannelCapacity: 100,
+    eventChannelConfig: {
+      throwOnLag: false,
+      lagReportInterval: 10
+    },
+    maxConsecutiveErrors: 3,
+    initialBackoffMs: 100,
+    maxBackoffMs: 5000,
+    stopOnCriticalError: true
+  };
 
-  // Create a log engine
-  const logEngine = new Engine<Log, Action>();
-  logEngine.addCollector(LogCollector.withHttp(nodeUrl, mainnet, {
+  // Block collector configuration
+  const blockCollectorConfig: BlockCollectorConfig = {
+    pollingIntervalMs: 2000,
+    maxQueueSize: 50,
+    includeTransactions: true
+  };
+
+  // Log collector configuration
+  const logFilter: LogFilter = {
     // Filter for Transfer events from the USDC contract
     address: '0x29219dd400f2bf60e5a23d13be72b486d4038894',
     topics: ['0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef']
-  }));
+  };
+  
+  const logCollectorConfig: LogCollectorConfig = {
+    pollingIntervalMs: 2000,
+    maxQueueSize: 100,
+    blockRange: 50
+  };
+
+  // Mempool collector configuration
+  const mempoolCollectorConfig: MempoolCollectorConfig = {
+    pollingIntervalMs: 1000,
+    maxQueueSize: 200,
+    maxPendingTxs: 1000,
+    maxProcessedTxs: 5000,
+    maxConcurrentFetches: 10
+  };
+
+  // Create a block engine
+  const blockEngine = new Engine<Block, Action>(engineConfig);
+  blockEngine.addCollector(BlockCollector.withHttp(nodeUrl, mainnet, blockCollectorConfig));
+  blockEngine.addStrategy(new BlockStrategy());
+  blockEngine.addExecutor(new PrinterExecutor<Action>("Block"));
+
+  // Create a log engine
+  const logEngine = new Engine<Log, Action>(engineConfig);
+  logEngine.addCollector(LogCollector.withHttp(nodeUrl, mainnet, logFilter, logCollectorConfig));
   logEngine.addStrategy(new LogStrategy());
-  logEngine.addExecutor(new PrinterExecutor<Action>());
+  logEngine.addExecutor(new PrinterExecutor<Action>("Log"));
 
   // Create a transaction engine
-  const txEngine = new Engine<Transaction, Action>();
-  txEngine.addCollector(MempoolCollector.withHttp(nodeUrl, mainnet));
+  const txEngine = new Engine<Transaction, Action>(engineConfig);
+  txEngine.addCollector(MempoolCollector.withHttp(nodeUrl, mainnet, mempoolCollectorConfig));
   txEngine.addStrategy(new TransactionStrategy());
-  txEngine.addExecutor(new PrinterExecutor<Action>());
+  txEngine.addExecutor(new PrinterExecutor<Action>("Transaction"));
+
+  // Set up signal handlers to stop the engines gracefully
+  process.on('SIGINT', async () => {
+    logger.info("Received SIGINT, stopping engines...");
+    await Promise.all([
+      blockEngine.stop(3000),
+      logEngine.stop(3000),
+      txEngine.stop(3000)
+    ]);
+  });
 
   // Run the engines
   logger.info("Starting engines...");
   
-  // Run the block engine
-  blockEngine.run().then(tasks => {
-    logger.info("Block engine started");
-  }).catch(err => {
-    logger.error(`Error starting block engine: ${err}`);
-  });
+  // Run all engines
+  const blockTasks = await blockEngine.run();
+  logger.info("Block engine started");
+  
+  const logTasks = await logEngine.run();
+  logger.info("Log engine started");
+  
+  const txTasks = await txEngine.run();
+  logger.info("Transaction engine started");
 
-  // Run the log engine
-  logEngine.run().then(tasks => {
-    logger.info("Log engine started");
-  }).catch(err => {
-    logger.error(`Error starting log engine: ${err}`);
+  // Run for 5 seconds
+  logger.info("Running for 5 seconds...");
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  
+  // Stop all engines with a 5-second timeout
+  logger.info("Stopping engines...");
+  await Promise.all([
+    blockEngine.stop(5000),
+    logEngine.stop(5000),
+    txEngine.stop(5000)
+  ]);
+  
+  // Wait for all tasks to complete
+  await Promise.all([...blockTasks, ...logTasks, ...txTasks]).catch(err => {
+    logger.error(`Task terminated unexpectedly: ${err}`);
   });
-
-  // Run the transaction engine
-  txEngine.run().then(tasks => {
-    logger.info("Transaction engine started");
-  }).catch(err => {
-    logger.error(`Error starting transaction engine: ${err}`);
-  });
-
-  // Keep the process running
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Run for 1 sec
+  
+  logger.info("All engines stopped");
 }
 
 // Run the example
-if (require.main === module) {
-  main().catch(err => {
-    logger.error(`Error: ${err}`);
-    process.exit(1);
-  });
-}
+main().catch(err => {
+  logger.error(`Error: ${err}`);
+  process.exit(1);
+});

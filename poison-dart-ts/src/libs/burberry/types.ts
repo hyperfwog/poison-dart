@@ -3,7 +3,6 @@
  * Ported from Rust crate burberry/src/types.rs
  */
 
-// In TypeScript, we use AsyncIterator instead of Rust's Stream
 export type CollectorStream<E> = AsyncIterator<E>;
 
 /**
@@ -15,10 +14,38 @@ export interface Collector<E> {
 }
 
 /**
+ * Result of submitting an action
+ */
+export interface SubmitResult {
+  /** Whether the submission was successful */
+  success: boolean;
+  /** Error message if the submission failed */
+  error?: string;
+}
+
+/**
  * ActionSubmitter interface - submits actions to be executed
  */
 export interface ActionSubmitter<A> {
+  /**
+   * Submit an action
+   * @param action The action to submit
+   */
   submit(action: A): void;
+  
+  /**
+   * Submit an action asynchronously
+   * @param action The action to submit
+   * @returns A promise that resolves to the result of the submission
+   */
+  submitAsync(action: A): Promise<SubmitResult>;
+  
+  /**
+   * Try to submit an action
+   * @param action The action to submit
+   * @returns Whether the action was submitted successfully
+   */
+  trySubmit?(action: A): boolean;
 }
 
 /**
@@ -43,7 +70,7 @@ export interface Executor<A> {
  */
 export class CollectorMap<E1, E2> implements Collector<E2> {
   private inner: Collector<E1>;
-  private f: (e: E1) => E2;
+  private readonly f: (e: E1) => E2;
 
   constructor(collector: Collector<E1>, f: (e: E1) => E2) {
     this.inner = collector;
@@ -76,7 +103,7 @@ export class CollectorMap<E1, E2> implements Collector<E2> {
  */
 export class CollectorFilterMap<E1, E2> implements Collector<E2> {
   private inner: Collector<E1>;
-  private f: (e: E1) => E2 | null | undefined;
+  private readonly f: (e: E1) => E2 | null | undefined;
 
   constructor(collector: Collector<E1>, f: (e: E1) => E2 | null | undefined) {
     this.inner = collector;
@@ -116,7 +143,7 @@ export class CollectorFilterMap<E1, E2> implements Collector<E2> {
  */
 export class ExecutorMap<A1, A2> implements Executor<A1> {
   private inner: Executor<A2>;
-  private f: (a: A1) => A2 | null | undefined;
+  private readonly f: (a: A1) => A2 | null | undefined;
 
   constructor(executor: Executor<A2>, f: (a: A1) => A2 | null | undefined) {
     this.inner = executor;
