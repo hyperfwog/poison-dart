@@ -1,5 +1,5 @@
 /**
- * Core engine for the Burberry framework
+ * Core engine for the Frogberry framework
  * Improved version with better memory management and error handling
  */
 
@@ -270,11 +270,11 @@ export class Engine<E, A> {
     
     // Set global state to indicate forced shutdown
     // This will be checked by collectors and other components
-    (global as any).__BURBERRY_FORCED_SHUTDOWN__ = true;
+    (global as any).__FROGBERRY_FORCED_SHUTDOWN__ = true;
     
     // After a short delay, reset the forced shutdown flag
     setTimeout(() => {
-      (global as any).__BURBERRY_FORCED_SHUTDOWN__ = false;
+      (global as any).__FROGBERRY_FORCED_SHUTDOWN__ = false;
     }, 5000);
   }
 

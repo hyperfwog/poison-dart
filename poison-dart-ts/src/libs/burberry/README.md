@@ -1,10 +1,18 @@
-# Burberry
+# Frogberry
 
-A TypeScript/Bun port of the [burberry](https://github.com/paradigmxyz/artemis/) framework, which is a fork of [paradigm/artemis](https://github.com/paradigmxyz/artemis/) with modifications.
+A TypeScript/Bun port of the [frogberry](https://github.com/paradigmxyz/artemis/) framework, which is a fork of [paradigm/artemis](https://github.com/paradigmxyz/artemis/) with modifications.
+
+## Installation
+
+You can install Frogberry directly from GitHub:
+
+```bash
+bun add https://github.com/username/frogberry.git
+```
 
 ## Overview
 
-Burberry is a framework for building trading bots and other event-driven applications. It provides a clean architecture for collecting events, processing them with strategies, and executing actions.
+Frogberry is a framework for building trading bots and other event-driven applications. It provides a clean architecture for collecting events, processing them with strategies, and executing actions.
 
 ## Core Components
 
@@ -118,9 +126,28 @@ main().catch(err => {
 - **Async Support**: Built with async/await and promises.
 - **Extensible**: Add your own collectors, strategies, and executors.
 
+## Examples
+
+### Simple Example
+
+A basic example that demonstrates the core functionality of Frogberry:
+
+```bash
+bun run example
+```
+
+### HyperEVM Example
+
+An example that demonstrates how to monitor HyperEVM events:
+
+```bash
+bun run example:hyperevm
+```
+
 ## Optional Features
 
-The following features are available but not implemented in this port yet:
+The following features are available:
 
 - **Ethereum Support**: Collectors for Ethereum blocks, transactions, and logs.
+- **HyperEVM Support**: Collectors for HyperEVM blocks, transactions, and logs.
 - **Telegram Support**: Executors for sending messages to Telegram.

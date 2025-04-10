@@ -1,5 +1,5 @@
 /**
- * Core types for the Burberry framework
+ * Core types for the Frogberry framework
  * Ported from Rust crate burberry/src/types.rs
  */
 

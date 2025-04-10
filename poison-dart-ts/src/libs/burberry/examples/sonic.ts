@@ -156,9 +156,9 @@ async function main() {
     maxConcurrentFetches: 10
   };
 
-  // Create a block engine
+  // Create a block engine with WebSocket transport for real-time block updates
   const blockEngine = new Engine<Block, Action>(engineConfig);
-  blockEngine.addCollector(BlockCollector.withHttp(nodeUrl, mainnet, blockCollectorConfig));
+  blockEngine.addCollector(BlockCollector.withWebSocket(wsUri, mainnet, blockCollectorConfig));
   blockEngine.addStrategy(new BlockStrategy());
   blockEngine.addExecutor(new PrinterExecutor<Action>("Block"));
 

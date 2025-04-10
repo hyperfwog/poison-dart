@@ -1,13 +1,16 @@
 {
-  "name": "burberry",
+  "name": "frogberry",
   "version": "0.1.0",
-  "description": "A TypeScript/Bun port of the burberry framework for building trading bots",
+  "description": "A TypeScript/Bun port of the Frogberry framework for building trading bots",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "bun test",
-    "example": "bun examples/simple.ts"
+    "example": "bun examples/simple.ts",
+    "example:hyperevm": "bun examples/hyperevm.ts",
+    "prepare": "bun run build"
   },
   "keywords": [
     "trading",
@@ -19,6 +22,14 @@
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/username/frogberry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/username/frogberry/issues"
+  },
+  "homepage": "https://github.com/username/frogberry#readme",
   "devDependencies": {
     "typescript": "^5.0.0",
     "@types/bun": "latest"
@@ -30,5 +41,10 @@
     "viem": {
       "optional": true
     }
-  }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }

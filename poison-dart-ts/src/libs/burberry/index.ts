@@ -1,5 +1,5 @@
 /**
- * Burberry - A framework for building trading bots
+ * Frogberry - A framework for building trading bots
  * Ported from Rust crate burberry
  */
 
