@@ -178,9 +178,9 @@ async function main() {
   process.on('SIGINT', async () => {
     logger.info("Received SIGINT, stopping engines...");
     await Promise.all([
-      blockEngine.stop(3000),
-      logEngine.stop(3000),
-      txEngine.stop(3000)
+      blockEngine.stop(10000),
+      logEngine.stop(10000),
+      txEngine.stop(10000)
     ]);
   });
 
@@ -197,16 +197,16 @@ async function main() {
   const txTasks = await txEngine.run();
   logger.info("Transaction engine started");
 
-  // Run for 5 seconds
-  logger.info("Running for 5 seconds...");
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  // Run for 10 seconds
+  logger.info("Running for 10 seconds...");
+  await new Promise(resolve => setTimeout(resolve, 10000));
   
-  // Stop all engines with a 5-second timeout
+  // Stop all engines with a 10-second timeout
   logger.info("Stopping engines...");
   await Promise.all([
-    blockEngine.stop(5000),
-    logEngine.stop(5000),
-    txEngine.stop(5000)
+    blockEngine.stop(10000),
+    logEngine.stop(10000),
+    txEngine.stop(10000)
   ]);
   
   // Wait for all tasks to complete

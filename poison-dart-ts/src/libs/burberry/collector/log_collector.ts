@@ -348,13 +348,20 @@ export class LogCollector implements Collector<Log> {
           return;
         }
         
+        // Check again if we're done before processing logs
+        if (done || abortController.signal.aborted || (global as any).__BURBERRY_FORCED_SHUTDOWN__) {
+          isPolling = false;
+          return;
+        }
+        
         // Process the logs
         logger.debug(`Processed logs from blocks ${fromBlock} to ${toBlock}, found ${logs.length} logs`);
         
         for (const log of logs) {
           // Check if we're done before processing each log
-          if (done || abortController.signal.aborted) {
-            break;
+          if (done || abortController.signal.aborted || (global as any).__BURBERRY_FORCED_SHUTDOWN__) {
+            isPolling = false;
+            return;
           }
           
           if (resolvers.length > 0) {
@@ -426,6 +433,14 @@ export class LogCollector implements Collector<Log> {
       
       // Clear the queue
       queue.length = 0;
+      
+      // Set the global forced shutdown flag to ensure any in-progress operations stop
+      (global as any).__BURBERRY_FORCED_SHUTDOWN__ = true;
+      
+      // Reset the flag after a short delay
+      setTimeout(() => {
+        (global as any).__BURBERRY_FORCED_SHUTDOWN__ = false;
+      }, 1000);
     };
 
     // Return an async iterator that yields logs
