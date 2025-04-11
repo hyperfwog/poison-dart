@@ -2,7 +2,11 @@
  * DEX interface module
  */
 import type { Address, Hash, PublicClient, WalletClient } from 'viem';
+import { Logger } from '../../libs/logger';
 import type { Pool, Protocol } from '../types';
+
+// Create a logger instance for the DEX module
+const logger = Logger.forContext('DEX');
 
 /**
  * Interface for DEX interactions
@@ -252,7 +256,7 @@ export class Trader {
         // Update amountIn for the next hop
         amountIn = amountOut;
       } catch (error) {
-        console.error('Error simulating trade:', error);
+        logger.error('Error simulating trade:', error);
         return {
           amountOut: BigInt(0),
           gasCost: BigInt(0),
@@ -300,7 +304,7 @@ export class Trader {
       });
 
       // Wait for the transaction to be mined
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      const _receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
 
       // Update amountIn for the next hop
       // In a real implementation, you would need to extract the actual output amount

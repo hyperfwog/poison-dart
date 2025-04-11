@@ -3,7 +3,11 @@ import type { Executor } from 'frogberry';
  * Transaction executor for the arbitrage bot
  */
 import type { PublicClient, WalletClient } from 'viem';
+import { Logger } from '../libs/logger';
 import { type Action, ActionType } from './types';
+
+// Create a logger instance for the executor
+const logger = Logger.forContext('Executor');
 
 /**
  * Executor for sending transactions
@@ -40,13 +44,13 @@ export class TransactionExecutor implements Executor<Action> {
         chain: this.publicClient.chain,
       });
 
-      console.log(`Transaction sent: ${txHash}`);
+      logger.info(`Transaction sent: ${txHash}`);
 
       // Wait for the transaction to be mined
       const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
-      console.log(`Transaction mined: ${txHash}, status: ${receipt.status}`);
+      logger.success(`Transaction mined: ${txHash}, status: ${receipt.status}`);
     } catch (error) {
-      console.error('Failed to execute transaction:', error);
+      logger.error('Failed to execute transaction:', error);
       throw error;
     }
   }

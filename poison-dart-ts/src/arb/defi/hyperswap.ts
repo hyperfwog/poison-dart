@@ -2,9 +2,13 @@
  * HyperSwap DEX implementation (placeholder)
  */
 import { type Address, type PublicClient, type WalletClient, encodeFunctionData } from 'viem';
+import { Logger } from '../../libs/logger';
 import { DEX_CONTRACTS } from '../config';
 import { type Pool, Protocol, type Token } from '../types';
 import { BaseDex } from './mod';
+
+// Create a logger instance for HyperSwapDex
+const logger = Logger.forContext('HyperSwap');
 
 // HyperSwap Router ABI (placeholder - to be updated with actual ABI)
 const HYPERSWAP_ROUTER_ABI = [
@@ -78,12 +82,12 @@ export class HyperSwapDex extends BaseDex {
       });
 
       // Sum of both reserves as a simple liquidity measure
-      const reserve0 = (result as any[])[0] as bigint;
-      const reserve1 = (result as any[])[1] as bigint;
+      const reserve0 = (result as [bigint, bigint, bigint])[0];
+      const reserve1 = (result as [bigint, bigint, bigint])[1];
       this.poolLiquidity = reserve0 + reserve1;
       return this.poolLiquidity;
     } catch (error) {
-      console.error('Error getting liquidity:', error);
+      logger.error('Error getting liquidity:', error);
       return BigInt(0);
     }
   }
@@ -95,7 +99,7 @@ export class HyperSwapDex extends BaseDex {
    * @param amountIn The amount of tokens to swap
    * @returns The transaction data
    */
-  async swapTx(sender: Address, recipient: Address, amountIn: bigint): Promise<string> {
+  async swapTx(_sender: Address, recipient: Address, amountIn: bigint): Promise<string> {
     // Get the current timestamp plus 20 minutes for the deadline
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
 
@@ -146,7 +150,7 @@ export class HyperSwapDex extends BaseDex {
       const [token0, token1] = tokenA < tokenB ? [tokenA, tokenB] : [tokenB, tokenA];
 
       const result = await publicClient.readContract({
-        address: DEX_CONTRACTS.HYPERSWAP.FACTORY as Address,
+        address: DEX_CONTRACTS.HYPERSWAP.V2_FACTORY as Address,
         abi: HYPERSWAP_FACTORY_ABI,
         functionName: 'getPair',
         args: [token0, token1],
@@ -154,7 +158,7 @@ export class HyperSwapDex extends BaseDex {
 
       return result as Address;
     } catch (error) {
-      console.error('Error finding pool:', error);
+      logger.error('Error finding pool:', error);
       throw new Error(`Pool not found for tokens ${tokenA} and ${tokenB}`);
     }
   }
@@ -180,7 +184,7 @@ export class HyperSwapDex extends BaseDex {
     );
 
     const pool: Pool = {
-      protocol: Protocol.HyperSwap,
+      protocol: Protocol.HyperSwapV2,
       address: poolAddress,
       tokens: [tokenA, tokenB],
     };

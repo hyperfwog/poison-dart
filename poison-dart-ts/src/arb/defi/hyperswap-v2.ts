@@ -2,9 +2,13 @@
  * HyperSwap V2 DEX implementation (Uniswap V2 fork)
  */
 import { type Address, type PublicClient, type WalletClient, encodeFunctionData } from 'viem';
+import { Logger } from '../../libs/logger';
 import { DEX_CONTRACTS } from '../config';
 import { type Pool, Protocol, type Token } from '../types';
 import { BaseDex } from './mod';
+
+// Create a logger instance for HyperSwapV2Dex
+const logger = Logger.forContext('HyperSwapV2');
 
 // HyperSwap V2 Router ABI
 const HYPERSWAP_V2_ROUTER_ABI = [
@@ -102,12 +106,12 @@ export class HyperSwapV2Dex extends BaseDex {
       });
 
       // Sum of both reserves as a simple liquidity measure
-      const reserve0 = (result as any[])[0] as bigint;
-      const reserve1 = (result as any[])[1] as bigint;
+      const reserve0 = (result as [bigint, bigint, bigint])[0];
+      const reserve1 = (result as [bigint, bigint, bigint])[1];
       this.poolLiquidity = reserve0 + reserve1;
       return this.poolLiquidity;
     } catch (error) {
-      console.error('Error getting liquidity:', error);
+      logger.error('Error getting liquidity:', error);
       return BigInt(0);
     }
   }
@@ -119,7 +123,7 @@ export class HyperSwapV2Dex extends BaseDex {
    * @param amountIn The amount of tokens to swap
    * @returns The transaction data
    */
-  async swapTx(sender: Address, recipient: Address, amountIn: bigint): Promise<string> {
+  async swapTx(_sender: Address, recipient: Address, amountIn: bigint): Promise<string> {
     // Get the current timestamp plus 20 minutes for the deadline
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
 
@@ -162,7 +166,7 @@ export class HyperSwapV2Dex extends BaseDex {
       const slippageFactor = BigInt(Math.floor((100 - slippagePercent) * 1000)) / BigInt(1000);
       return (amountOut * slippageFactor) / BigInt(100);
     } catch (error) {
-      console.error('Error getting amount out minimum:', error);
+      logger.error('Error getting amount out minimum:', error);
       // Fallback to a simple estimation with 0.5% slippage
       return (amountIn * BigInt(995)) / BigInt(1000);
     }
@@ -193,7 +197,7 @@ export class HyperSwapV2Dex extends BaseDex {
 
       return result as Address;
     } catch (error) {
-      console.error('Error finding pool:', error);
+      logger.error('Error finding pool:', error);
       throw new Error(`Pool not found for tokens ${tokenA} and ${tokenB}`);
     }
   }

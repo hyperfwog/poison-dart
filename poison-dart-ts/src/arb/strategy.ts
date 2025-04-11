@@ -3,9 +3,13 @@ import type { ActionSubmitter, Strategy } from 'frogberry';
  * Arbitrage strategy implementation
  */
 import type { Address, Block, Log, PublicClient, Transaction, WalletClient } from 'viem';
+import { Logger } from '../libs/logger';
 import { type Dex, Path } from './defi';
 import { HyperSwapV2Dex, HyperSwapV3Dex, KittenSwapDex, ShadowDex, SwapXDex } from './defi';
 import { type Action, ActionType, type Event, EventType, Protocol } from './types';
+
+// Create a logger instance for the strategy
+const logger = Logger.forContext('Strategy');
 
 /**
  * Arbitrage strategy
@@ -46,7 +50,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
    * @param submitter The action submitter
    */
   private async processBlock(block: Block, submitter: ActionSubmitter<Action>): Promise<void> {
-    console.log(`Processing block ${block.number}`);
+    logger.info(`Processing block ${block.number}`);
 
     // In a real implementation, we would scan for arbitrage opportunities here
     // For this example, we'll just send a notification
@@ -66,7 +70,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
    * @param submitter The action submitter
    */
   private async processLog(log: Log, submitter: ActionSubmitter<Action>): Promise<void> {
-    console.log(`Processing log from ${log.address}`);
+    logger.info(`Processing log from ${log.address}`);
 
     // In a real implementation, we would look for swap events and update our price models
     // For this example, we'll just send a notification for USDC transfers
@@ -94,7 +98,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
     tx: Transaction,
     submitter: ActionSubmitter<Action>
   ): Promise<void> {
-    console.log(`Processing transaction ${tx.hash}`);
+    logger.info(`Processing transaction ${tx.hash}`);
 
     // In a real implementation, we would look for pending swaps and try to front-run them
     // For now, we'll just log the transaction hash
@@ -149,7 +153,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
         dexes.push(shadowDex);
         this.knownDexes.set(key, shadowDex);
       } catch (error) {
-        console.log(`No Shadow DEX pool found for ${tokenInType}-${tokenOutType}`);
+        logger.debug(`No Shadow DEX pool found for ${tokenInType}-${tokenOutType}`);
       }
 
       try {
@@ -176,7 +180,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
         dexes.push(swapXDex);
         this.knownDexes.set(key, swapXDex);
       } catch (error) {
-        console.log(`No SwapX DEX pool found for ${tokenInType}-${tokenOutType}`);
+        logger.debug(`No SwapX DEX pool found for ${tokenInType}-${tokenOutType}`);
       }
     } else {
       // HyperEVM chain DEXes
@@ -205,7 +209,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
         dexes.push(kittenSwapDex);
         this.knownDexes.set(key, kittenSwapDex);
       } catch (error) {
-        console.log(`No KittenSwap volatile pool found for ${tokenInType}-${tokenOutType}`);
+        logger.debug(`No KittenSwap volatile pool found for ${tokenInType}-${tokenOutType}`);
       }
 
       try {
@@ -233,7 +237,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
         dexes.push(kittenSwapStableDex);
         this.knownDexes.set(`${key}-stable`, kittenSwapStableDex);
       } catch (error) {
-        console.log(`No KittenSwap stable pool found for ${tokenInType}-${tokenOutType}`);
+        logger.debug(`No KittenSwap stable pool found for ${tokenInType}-${tokenOutType}`);
       }
 
       // Try to find HyperSwap V2 pool
@@ -260,7 +264,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
         dexes.push(hyperSwapV2Dex);
         this.knownDexes.set(`${key}-hyperv2`, hyperSwapV2Dex);
       } catch (error) {
-        console.log(`No HyperSwap V2 pool found for ${tokenInType}-${tokenOutType}`);
+        logger.debug(`No HyperSwap V2 pool found for ${tokenInType}-${tokenOutType}`);
       }
 
       // Try to find HyperSwap V3 pools with different fee tiers
@@ -291,7 +295,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
           dexes.push(hyperSwapV3Dex);
           this.knownDexes.set(`${key}-hyperv3-${fee}`, hyperSwapV3Dex);
         } catch (error) {
-          console.log(
+          logger.debug(
             `No HyperSwap V3 pool found for ${tokenInType}-${tokenOutType} with fee ${fee}`
           );
         }

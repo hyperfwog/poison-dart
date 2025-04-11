@@ -8,25 +8,29 @@ import { TelegramMessage } from 'frogberry/utils/telegram';
 import { http, createPublicClient, createWalletClient } from 'viem';
 import { Transaction } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { Logger } from '../libs/logger';
 import { CHAINS, loadConfig } from './config';
 import { TransactionExecutor } from './executor';
 import { ArbStrategy } from './strategy';
 import { type Action, ActionType, type Event, EventType } from './types';
 
+// Create a logger instance for the main module
+const logger = Logger.forContext('Main');
+
 /**
  * Main function to run the arbitrage bot
  */
 async function main() {
-  console.log('Starting arbitrage bot...');
+  logger.info('Starting arbitrage bot...');
 
   // Load configuration
   const config = loadConfig();
-  console.log(`Wallet address: ${config.wallet.address}`);
-  console.log(`Chain ID: ${config.chainId}`);
+  logger.info(`Wallet address: ${config.wallet.address}`);
+  logger.info(`Chain ID: ${config.chainId}`);
 
   // Determine which chain to use
   const chain = config.chainId === 999 ? CHAINS.HYPEREVM : CHAINS.SONIC;
-  console.log(`Using chain: ${chain.name}`);
+  logger.info(`Using chain: ${chain.name}`);
 
   // Create Viem clients
   const publicClient = createPublicClient({
@@ -62,7 +66,7 @@ async function main() {
           const result = await stream.next();
 
           if (result.done) {
-            return { done: true, value: undefined as any };
+            return { done: true, value: undefined };
           }
 
           // Convert Transaction to Event with specific EventType
@@ -104,20 +108,20 @@ async function main() {
     };
 
     mempoolEngine.addExecutor(telegramWrapperExecutor);
-    console.log('Telegram notifications enabled');
+    logger.info('Telegram notifications enabled');
   }
 
   // Run the engines
-  console.log('Starting engines...');
+  logger.info('Starting engines...');
 
   // Run the mempool engine
   mempoolEngine
     .run()
     .then(() => {
-      console.log('Mempool engine started');
+      logger.success('Mempool engine started');
     })
     .catch((err) => {
-      console.error(`Error starting mempool engine: ${err}`);
+      logger.error(`Error starting mempool engine: ${err}`, err);
     });
 
   // Keep the process running
@@ -127,7 +131,7 @@ async function main() {
 // Run the main function
 if (require.main === module) {
   main().catch((err) => {
-    console.error(`Error: ${err}`);
+    logger.error(`Error: ${err}`, err);
     process.exit(1);
   });
 }

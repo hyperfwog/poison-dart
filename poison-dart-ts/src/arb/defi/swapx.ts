@@ -1,16 +1,14 @@
 /**
  * SwapX DEX implementation (Algebra V4 fork)
  */
-import {
-  type Address,
-  type PublicClient,
-  type WalletClient,
-  encodeFunctionData,
-  parseUnits,
-} from 'viem';
-import { DEX_CONTRACTS } from '../config.js';
-import { type Pool, Protocol, type Token } from '../types.js';
-import { BaseDex } from './mod.js';
+import { type Address, type PublicClient, type WalletClient, encodeFunctionData } from 'viem';
+import { Logger } from '../../libs/logger';
+import { DEX_CONTRACTS } from '../config';
+import { type Pool, Protocol, type Token } from '../types';
+import { BaseDex } from './mod';
+
+// Create a logger instance for SwapXDex
+const logger = Logger.forContext('SwapX');
 
 // SwapX Router ABI (Algebra V4 compatible)
 const SWAPX_ROUTER_ABI = [
@@ -148,7 +146,7 @@ export class SwapXDex extends BaseDex {
       this.poolLiquidity = result as bigint;
       return this.poolLiquidity;
     } catch (error) {
-      console.error('Error getting liquidity:', error);
+      logger.error('Error getting liquidity:', error);
       return BigInt(0);
     }
   }
@@ -172,7 +170,7 @@ export class SwapXDex extends BaseDex {
       this.fee = Number((result as any[])[2]) / 10000;
       return this.fee;
     } catch (error) {
-      console.error('Error getting fee:', error);
+      logger.error('Error getting fee:', error);
       return 0.003; // Default to 0.3%
     }
   }
@@ -237,7 +235,7 @@ export class SwapXDex extends BaseDex {
       const slippageFactor = BigInt(Math.floor((100 - slippagePercent) * 1000)) / BigInt(1000);
       return (amountOut * slippageFactor) / BigInt(100);
     } catch (error) {
-      console.error('Error getting amount out minimum:', error);
+      logger.error('Error getting amount out minimum:', error);
       // Fallback to a simple estimation with 0.5% slippage
       return (amountIn * BigInt(995)) / BigInt(1000);
     }
@@ -265,7 +263,7 @@ export class SwapXDex extends BaseDex {
 
       return result as Address;
     } catch (error) {
-      console.error('Error finding pool:', error);
+      logger.error('Error finding pool:', error);
       throw new Error(`Pool not found for tokens ${tokenA} and ${tokenB}`);
     }
   }
