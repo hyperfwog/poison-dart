@@ -4,6 +4,7 @@ import type { ActionSubmitter, Strategy } from 'frogberry';
  */
 import type { Address, Block, Log, PublicClient, Transaction, WalletClient } from 'viem';
 import { Logger } from '../libs/logger';
+import type { ArbConfig } from './config';
 import { type Dex, Path } from './defi';
 import { HyperSwapV2Dex, HyperSwapV3Dex, KittenSwapDex, ShadowDex, SwapXDex } from './defi';
 import { type Action, ActionType, type Event, EventType, Protocol } from './types';
@@ -17,14 +18,10 @@ const logger = Logger.forContext('Strategy');
 export class ArbStrategy implements Strategy<Event, Action> {
   private readonly publicClient: PublicClient;
   private readonly walletClient: WalletClient;
-  private readonly config: Record<string, unknown>;
+  private readonly config: ArbConfig;
   private knownDexes: Map<string, Dex> = new Map();
 
-  constructor(
-    publicClient: PublicClient,
-    walletClient: WalletClient,
-    config: Record<string, unknown>
-  ) {
+  constructor(publicClient: PublicClient, walletClient: WalletClient, config: ArbConfig) {
     this.publicClient = publicClient;
     this.walletClient = walletClient;
     this.config = config;
