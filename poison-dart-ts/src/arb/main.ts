@@ -1,16 +1,17 @@
+import { CollectorFilterMap, Engine, type Executor } from 'frogberry';
+import { MempoolCollector } from 'frogberry/collector';
+import { PrinterExecutor, TelegramExecutor } from 'frogberry/executor';
+import { TelegramMessage } from 'frogberry/utils/telegram';
 /**
  * Arbitrage bot main entry point
  */
-import { createPublicClient, createWalletClient, http } from 'viem';
+import { http, createPublicClient, createWalletClient } from 'viem';
+import { Transaction } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sonic } from 'viem/chains';
-import { ActionType, EventType, type Event, type Action } from './types';
-import { loadConfig } from './config';
-import { ArbStrategy } from './strategy';
+import { CHAINS, loadConfig } from './config';
 import { TransactionExecutor } from './executor';
-import {Engine, Executor} from '../libs/burberry';
-import { MempoolCollector } from '../libs/burberry/collector';
-import {Message, PrinterExecutor, TelegramExecutor} from '../libs/burberry/executor';
+import { ArbStrategy } from './strategy';
+import { type Action, ActionType, type Event, EventType } from './types';
 
 /**
  * Main function to run the arbitrage bot
@@ -21,17 +22,22 @@ async function main() {
   // Load configuration
   const config = loadConfig();
   console.log(`Wallet address: ${config.wallet.address}`);
+  console.log(`Chain ID: ${config.chainId}`);
+
+  // Determine which chain to use
+  const chain = config.chainId === 999 ? CHAINS.HYPEREVM : CHAINS.SONIC;
+  console.log(`Using chain: ${chain.name}`);
 
   // Create Viem clients
   const publicClient = createPublicClient({
-    chain: sonic,
+    chain,
     transport: http(config.rpc.url),
   });
 
   const account = privateKeyToAccount(config.wallet.privateKey as `0x${string}`);
   const walletClient = createWalletClient({
     account,
-    chain: sonic,
+    chain,
     transport: http(config.rpc.url),
   });
 
@@ -41,25 +47,31 @@ async function main() {
   // Create the engines
   const mempoolEngine = new Engine<Event, Action>();
 
-  const mempoolCollector = MempoolCollector.withHttp(config.rpc.url, sonic);
+  // Create a mempool collector
+  const mempoolCollector = MempoolCollector.withHttp(config.rpc.url, chain);
+
+  // Create a custom collector
   mempoolEngine.addCollector({
-    ...mempoolCollector,
-    getEventStream: async () => {
+    name: () => 'MempoolEventCollector',
+    async getEventStream() {
       const stream = await mempoolCollector.getEventStream();
+
+      // Create a wrapper stream that converts Transaction to Event
       return {
-        async next() {
+        async next(): Promise<IteratorResult<Event>> {
           const result = await stream.next();
-          if (result.done) return result;
-          return {
-            done: false,
-            value: {
-              type: EventType.Transaction,
-              data: result.value,
-            },
+
+          if (result.done) {
+            return { done: true, value: undefined as any };
+          }
+
+          // Convert Transaction to Event with specific EventType
+          const event: Event = {
+            type: EventType.Transaction,
+            data: result.value,
           };
-        },
-        async return() {
-          return stream.return ? stream.return() : { done: true, value: undefined as any };
+
+          return { done: false, value: event };
         },
       };
     },
@@ -73,14 +85,14 @@ async function main() {
   mempoolEngine.addExecutor(txExecutor);
 
   // Add printer executor for debugging
-  const printerExecutor = new PrinterExecutor<Action>();
+  const printerExecutor = new PrinterExecutor();
   mempoolEngine.addExecutor(printerExecutor);
 
   // Add telegram executor if configured
   if (config.telegram) {
     // Create a filtered executor that only processes NotifyViaTelegram actions
-    const telegramExecutor = new TelegramExecutor<Message>(config.telegram);
-    
+    const telegramExecutor = new TelegramExecutor(config.telegram);
+
     // Create a wrapper executor that extracts the message from the action
     const telegramWrapperExecutor: Executor<Action> = {
       name: () => 'TelegramWrapperExecutor',
@@ -88,7 +100,7 @@ async function main() {
         if (action.type === ActionType.NotifyViaTelegram) {
           return telegramExecutor.execute(action.data);
         }
-      }
+      },
     };
 
     mempoolEngine.addExecutor(telegramWrapperExecutor);
@@ -99,19 +111,22 @@ async function main() {
   console.log('Starting engines...');
 
   // Run the mempool engine
-  mempoolEngine.run().then(() => {
-    console.log('Mempool engine started');
-  }).catch(err => {
-    console.error(`Error starting mempool engine: ${err}`);
-  });
+  mempoolEngine
+    .run()
+    .then(() => {
+      console.log('Mempool engine started');
+    })
+    .catch((err) => {
+      console.error(`Error starting mempool engine: ${err}`);
+    });
 
   // Keep the process running
-  await new Promise(resolve => setTimeout(resolve, 24 * 60 * 60 * 1000)); // Run for 24 hours
+  await new Promise((resolve) => setTimeout(resolve, 24 * 60 * 60 * 1000)); // Run for 24 hours
 }
 
 // Run the main function
 if (require.main === module) {
-  main().catch(err => {
+  main().catch((err) => {
     console.error(`Error: ${err}`);
     process.exit(1);
   });

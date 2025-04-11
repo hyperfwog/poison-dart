@@ -1,10 +1,16 @@
 /**
  * Shadow DEX implementation (Uniswap V3 fork)
  */
-import { Address, PublicClient, WalletClient, encodeFunctionData, parseUnits } from 'viem';
-import { Protocol, Pool, Token } from '../types.js';
-import { BaseDex } from './mod.js';
+import {
+  type Address,
+  type PublicClient,
+  type WalletClient,
+  encodeFunctionData,
+  parseUnits,
+} from 'viem';
 import { DEX_CONTRACTS } from '../config.js';
+import { type Pool, Protocol, type Token } from '../types.js';
+import { BaseDex } from './mod.js';
 
 // Shadow Router ABI (Uniswap V3 compatible)
 const SHADOW_ROUTER_ABI = [

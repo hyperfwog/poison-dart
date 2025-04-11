@@ -1,7 +1,35 @@
 /**
  * Configuration for the arbitrage bot
  */
-import { Address } from 'viem';
+import type { Address, Chain } from 'viem';
+import { sonic } from 'viem/chains';
+
+/**
+ * Chain configurations
+ */
+export const CHAINS = {
+  SONIC: {
+    ...sonic,
+    id: 146, // Correct Sonic chain ID
+  },
+  HYPEREVM: {
+    id: 999,
+    name: 'HyperEVM',
+    nativeCurrency: {
+      decimals: 18,
+      name: 'HYPE',
+      symbol: 'HYPE',
+    },
+    rpcUrls: {
+      default: {
+        http: ['https://rpc.hyperliquid.xyz/evm'],
+      },
+      public: {
+        http: ['https://rpc.hyperliquid.xyz/evm'],
+      },
+    },
+  } as Chain,
+};
 
 /**
  * Base tokens that are commonly used in trading pairs
@@ -31,6 +59,23 @@ export const DEX_CONTRACTS = {
     ROUTER: '0xE6E9F79e551Dd3FAeF8aBe035896fc65A9eEB26c',
     QUOTER: '0xd74a9Bd1C98B2CbaB5823107eb2BE9C474bEe09A',
     POSITION_MANAGER: '0xd82Fe82244ad01AaD671576202F9b46b76fAdFE2',
+  },
+  // KittenSwap (Uniswap V2/V3 and Velodrome V1 fork)
+  KITTENSWAP: {
+    FACTORY: '0xDa12F450580A4cc485C3b501BAB7b0B3cbc3B31B',
+    ROUTER: '0xD6EeFfbDAF6503Ad6539CF8f337D79BEbbd40802',
+  },
+  // HyperSwap (Uniswap V2/V3 fork)
+  HYPERSWAP: {
+    // V2
+    V2_FACTORY: '0x724412C00059bf7d6ee7d4a1d0D5cd4de3ea1C48',
+    V2_ROUTER: '0xb4a9C4e6Ea8E2191d2FA5B380452a634Fb21240A',
+    // V3
+    V3_FACTORY: '0xB1c0fa0B789320044A6F623cFe5eBda9562602E3',
+    V3_ROUTER: '0x4E2960a8cd19B467b82d26D83fAcb0fAE26b094D',
+    V3_QUOTER: '0x03A918028f22D9E1473B7959C927AD7425A45C7C',
+    V3_POSITION_MANAGER: '0x6eDA206207c09e5428F281761DdC0D300851fBC8',
+    V3_TICK_LENS: '0x8F1eA97FfDfEDA3bE7EabfED95eF49f909b2975A',
   },
 };
 
@@ -71,6 +116,7 @@ export interface ArbConfig {
   maxSlippage: number; // Maximum slippage as a percentage (e.g., 0.5 for 0.5%)
   maxHops: number; // Maximum number of hops in a trade path
   maxPoolsPerHop: number; // Maximum number of pools to consider per hop
+  chainId: number; // Chain ID to use (250 for Sonic, 999 for HyperEVM)
 }
 
 /**
@@ -87,6 +133,7 @@ export const DEFAULT_CONFIG: Partial<ArbConfig> = {
   maxSlippage: 0.5, // 0.5%
   maxHops: 3,
   maxPoolsPerHop: 5,
+  chainId: 146, // Default to Sonic
 };
 
 /**
@@ -104,8 +151,24 @@ export function loadConfig(): ArbConfig {
     throw new Error('WALLET_ADDRESS environment variable is required');
   }
 
+  // Get chain ID from environment or use default
+  const chainId = process.env.CHAIN_ID
+    ? Number.parseInt(process.env.CHAIN_ID, 10)
+    : DEFAULT_CONFIG.chainId;
+
+  // Determine RPC URL based on chain ID
+  let rpcUrl = DEFAULT_CONFIG.rpc?.url || '';
+  if (chainId === 999) {
+    rpcUrl = CHAINS.HYPEREVM.rpcUrls.default.http[0];
+  }
+
   const config: ArbConfig = {
     ...DEFAULT_CONFIG,
+    chainId,
+    rpc: {
+      url: rpcUrl,
+      chainId,
+    },
     wallet: {
       address,
       privateKey,

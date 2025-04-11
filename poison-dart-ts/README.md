@@ -96,6 +96,34 @@ This is a work in progress. The core architecture has been implemented, but many
 - [ ] Add support for Shio transactions
 - [ ] Add proper error handling and logging
 
+## Code Quality
+
+This project uses [Biome](https://biomejs.dev/) for linting, formatting, and code organization. Biome is a fast, modern JavaScript/TypeScript tooling system that replaces the need for separate tools like ESLint and Prettier.
+
+### Available Scripts
+
+```bash
+# Run the linter
+bun run lint
+
+# Format code
+bun run format
+
+# Check formatting without making changes
+bun run format:check
+
+# Run both linting and formatting checks
+bun run check
+```
+
+### VSCode Integration
+
+This project includes VSCode settings for Biome integration. To get the best experience:
+
+1. Install the [Biome VSCode extension](https://marketplace.visualstudio.com/items?itemName=biomejs.biome)
+2. Open the project in VSCode to automatically use the recommended settings
+3. Enjoy automatic formatting on save and linting as you type
+
 ## License
 
 MIT

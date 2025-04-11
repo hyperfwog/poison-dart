@@ -9,7 +9,11 @@
     "start": "bun run dist/index.js",
     "dev": "bun run src/index.ts",
     "test": "bun test",
-    "prepare": "chmod +x dist/index.js"
+    "prepare": "chmod +x dist/index.js",
+    "lint": "biome lint ./src",
+    "format": "biome format --write ./src",
+    "format:check": "biome format ./src",
+    "check": "biome check --write ./src"
   },
   "bin": {
     "poison-dart": "./dist/index.js"
@@ -26,11 +30,13 @@
   "dependencies": {
     "commander": "^12.0.0",
     "dotenv": "^16.4.5",
+    "frogberry": "https://github.com/hyperfwog/frogberry.git",
     "viem": "^2.25.0",
     "ws": "^8.16.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@types/bun": "^1.2.8",
     "@types/ws": "^8.5.10",
     "typescript": "^5.4.2"

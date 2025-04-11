@@ -1,8 +1,8 @@
 /**
  * DEX interface module
  */
-import { Address, Hash, PublicClient, WalletClient } from 'viem';
-import { Protocol, Pool } from '../types';
+import type { Address, Hash, PublicClient, WalletClient } from 'viem';
+import type { Pool, Protocol } from '../types';
 
 /**
  * Interface for DEX interactions
@@ -62,7 +62,12 @@ export abstract class BaseDex implements Dex {
   protected walletClient: WalletClient;
   protected isA2B: boolean;
 
-  protected constructor(pool: Pool, publicClient: PublicClient, walletClient: WalletClient, isA2B = true) {
+  protected constructor(
+    pool: Pool,
+    publicClient: PublicClient,
+    walletClient: WalletClient,
+    isA2B = true
+  ) {
     this.pool = pool;
     this.publicClient = publicClient;
     this.walletClient = walletClient;
@@ -162,7 +167,7 @@ export class Path {
     if (this.isEmpty()) {
       return 'Empty path';
     }
-    
+
     let result = `Path: ${this.tokenInType()} -> `;
     for (let i = 0; i < this.path.length; i++) {
       const dex = this.path[i];
@@ -228,7 +233,7 @@ export class Trader {
       try {
         // Simulate the swap
         const txData = await dex.swapTx(ctx.sender, ctx.sender, amountIn);
-        
+
         // Estimate gas
         const gasEstimate = await this.publicClient.estimateGas({
           account: ctx.sender,
@@ -236,14 +241,14 @@ export class Trader {
           data: txData as `0x${string}`,
           value: BigInt(0),
         });
-        
+
         totalGasCost += gasEstimate * ctx.gasPrice;
-        
+
         // Get the expected output
         // This is a simplified version - in a real implementation, you would
         // need to decode the return value from the simulation
-        const amountOut = amountIn * BigInt(98) / BigInt(100); // Simplified: 2% slippage
-        
+        const amountOut = (amountIn * BigInt(98)) / BigInt(100); // Simplified: 2% slippage
+
         // Update amountIn for the next hop
         amountIn = amountOut;
       } catch (error) {
@@ -257,9 +262,7 @@ export class Trader {
     }
 
     // Calculate profit
-    const profit = amountIn > ctx.amountIn 
-      ? amountIn - ctx.amountIn - totalGasCost
-      : BigInt(0);
+    const profit = amountIn > ctx.amountIn ? amountIn - ctx.amountIn - totalGasCost : BigInt(0);
 
     return {
       amountOut: amountIn,
@@ -279,13 +282,13 @@ export class Trader {
     }
 
     let amountIn = ctx.amountIn;
-    let currentSender = ctx.sender;
+    const currentSender = ctx.sender;
     let txHash: Hash | undefined;
 
     for (const dex of ctx.path.path) {
       // Get the swap transaction data
       const txData = await dex.swapTx(currentSender, ctx.sender, amountIn);
-      
+
       // Send the transaction
       txHash = await this.walletClient.sendTransaction({
         account: currentSender,
@@ -295,14 +298,14 @@ export class Trader {
         gasPrice: ctx.gasPrice,
         chain: this.publicClient.chain,
       });
-      
+
       // Wait for the transaction to be mined
       const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
-      
+
       // Update amountIn for the next hop
       // In a real implementation, you would need to extract the actual output amount
       // from the transaction receipt or events
-      amountIn = amountIn * BigInt(98) / BigInt(100); // Simplified: 2% slippage
+      amountIn = (amountIn * BigInt(98)) / BigInt(100); // Simplified: 2% slippage
     }
 
     if (!txHash) {

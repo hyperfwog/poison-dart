@@ -1,30 +1,25 @@
 /**
- * SwapX DEX implementation (Algebra V4 fork)
+ * HyperSwap V3 DEX implementation (Uniswap V3 fork)
  */
-import {
-  type Address,
-  type PublicClient,
-  type WalletClient,
-  encodeFunctionData,
-  parseUnits,
-} from 'viem';
-import { DEX_CONTRACTS } from '../config.js';
-import { type Pool, Protocol, type Token } from '../types.js';
-import { BaseDex } from './mod.js';
+import { type Address, type PublicClient, type WalletClient, encodeFunctionData } from 'viem';
+import { DEX_CONTRACTS } from '../config';
+import { type Pool, Protocol, type Token } from '../types';
+import { BaseDex } from './mod';
 
-// SwapX Router ABI (Algebra V4 compatible)
-const SWAPX_ROUTER_ABI = [
+// HyperSwap V3 Router ABI
+const HYPERSWAP_V3_ROUTER_ABI = [
   {
     inputs: [
       {
         components: [
           { internalType: 'address', name: 'tokenIn', type: 'address' },
           { internalType: 'address', name: 'tokenOut', type: 'address' },
+          { internalType: 'uint24', name: 'fee', type: 'uint24' },
           { internalType: 'address', name: 'recipient', type: 'address' },
           { internalType: 'uint256', name: 'deadline', type: 'uint256' },
           { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
           { internalType: 'uint256', name: 'amountOutMinimum', type: 'uint256' },
-          { internalType: 'uint160', name: 'limitSqrtPrice', type: 'uint160' },
+          { internalType: 'uint160', name: 'sqrtPriceLimitX96', type: 'uint160' },
         ],
         internalType: 'struct ISwapRouter.ExactInputSingleParams',
         name: 'params',
@@ -36,36 +31,17 @@ const SWAPX_ROUTER_ABI = [
     stateMutability: 'payable',
     type: 'function',
   },
-  {
-    inputs: [
-      {
-        components: [
-          { internalType: 'bytes', name: 'path', type: 'bytes' },
-          { internalType: 'address', name: 'recipient', type: 'address' },
-          { internalType: 'uint256', name: 'deadline', type: 'uint256' },
-          { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
-          { internalType: 'uint256', name: 'amountOutMinimum', type: 'uint256' },
-        ],
-        internalType: 'struct ISwapRouter.ExactInputParams',
-        name: 'params',
-        type: 'tuple',
-      },
-    ],
-    name: 'exactInput',
-    outputs: [{ internalType: 'uint256', name: 'amountOut', type: 'uint256' }],
-    stateMutability: 'payable',
-    type: 'function',
-  },
 ];
 
-// SwapX Quoter ABI
-const SWAPX_QUOTER_ABI = [
+// HyperSwap V3 Quoter ABI
+const HYPERSWAP_V3_QUOTER_ABI = [
   {
     inputs: [
       { internalType: 'address', name: 'tokenIn', type: 'address' },
       { internalType: 'address', name: 'tokenOut', type: 'address' },
+      { internalType: 'uint24', name: 'fee', type: 'uint24' },
       { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
-      { internalType: 'uint160', name: 'limitSqrtPrice', type: 'uint160' },
+      { internalType: 'uint160', name: 'sqrtPriceLimitX96', type: 'uint160' },
     ],
     name: 'quoteExactInputSingle',
     outputs: [
@@ -79,22 +55,23 @@ const SWAPX_QUOTER_ABI = [
   },
 ];
 
-// SwapX Factory ABI
-const SWAPX_FACTORY_ABI = [
+// HyperSwap V3 Factory ABI
+const HYPERSWAP_V3_FACTORY_ABI = [
   {
     inputs: [
       { internalType: 'address', name: 'tokenA', type: 'address' },
       { internalType: 'address', name: 'tokenB', type: 'address' },
+      { internalType: 'uint24', name: 'fee', type: 'uint24' },
     ],
-    name: 'poolByPair',
+    name: 'getPool',
     outputs: [{ internalType: 'address', name: '', type: 'address' }],
     stateMutability: 'view',
     type: 'function',
   },
 ];
 
-// SwapX Pool ABI
-const SWAPX_POOL_ABI = [
+// HyperSwap V3 Pool ABI
+const HYPERSWAP_V3_POOL_ABI = [
   {
     inputs: [],
     name: 'liquidity',
@@ -104,30 +81,38 @@ const SWAPX_POOL_ABI = [
   },
   {
     inputs: [],
-    name: 'globalState',
+    name: 'slot0',
     outputs: [
-      { internalType: 'uint160', name: 'price', type: 'uint160' },
+      { internalType: 'uint160', name: 'sqrtPriceX96', type: 'uint160' },
       { internalType: 'int24', name: 'tick', type: 'int24' },
-      { internalType: 'uint16', name: 'fee', type: 'uint16' },
-      { internalType: 'uint16', name: 'timepointIndex', type: 'uint16' },
-      { internalType: 'uint8', name: 'communityFeeToken0', type: 'uint8' },
-      { internalType: 'uint8', name: 'communityFeeToken1', type: 'uint8' },
+      { internalType: 'uint16', name: 'observationIndex', type: 'uint16' },
+      { internalType: 'uint16', name: 'observationCardinality', type: 'uint16' },
+      { internalType: 'uint16', name: 'observationCardinalityNext', type: 'uint16' },
+      { internalType: 'uint8', name: 'feeProtocol', type: 'uint8' },
       { internalType: 'bool', name: 'unlocked', type: 'bool' },
     ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'fee',
+    outputs: [{ internalType: 'uint24', name: '', type: 'uint24' }],
     stateMutability: 'view',
     type: 'function',
   },
 ];
 
 /**
- * SwapX DEX implementation
+ * HyperSwap V3 DEX implementation
  */
-export class SwapXDex extends BaseDex {
+export class HyperSwapV3Dex extends BaseDex {
+  private fee: number;
   private poolLiquidity: bigint | null = null;
-  private fee: number | null = null;
 
   constructor(pool: Pool, publicClient: PublicClient, walletClient: WalletClient, isA2B = true) {
     super(pool, publicClient, walletClient, isA2B);
+    this.fee = pool.fee || 3000; // Default to 0.3% fee if not specified
   }
 
   /**
@@ -141,7 +126,7 @@ export class SwapXDex extends BaseDex {
     try {
       const result = await this.publicClient.readContract({
         address: this.address(),
-        abi: SWAPX_POOL_ABI,
+        abi: HYPERSWAP_V3_POOL_ABI,
         functionName: 'liquidity',
       });
 
@@ -150,30 +135,6 @@ export class SwapXDex extends BaseDex {
     } catch (error) {
       console.error('Error getting liquidity:', error);
       return BigInt(0);
-    }
-  }
-
-  /**
-   * Get the fee of the pool
-   */
-  async getFee(): Promise<number> {
-    if (this.fee !== null) {
-      return this.fee;
-    }
-
-    try {
-      const result = await this.publicClient.readContract({
-        address: this.address(),
-        abi: SWAPX_POOL_ABI,
-        functionName: 'globalState',
-      });
-
-      // Fee is in basis points (1/100 of a percent)
-      this.fee = Number((result as any[])[2]) / 10000;
-      return this.fee;
-    } catch (error) {
-      console.error('Error getting fee:', error);
-      return 0.003; // Default to 0.3%
     }
   }
 
@@ -195,16 +156,17 @@ export class SwapXDex extends BaseDex {
     const params = {
       tokenIn: this.tokenInType() as Address,
       tokenOut: this.tokenOutType() as Address,
+      fee: this.fee,
       recipient,
       deadline,
       amountIn,
       amountOutMinimum,
-      limitSqrtPrice: BigInt(0), // No price limit
+      sqrtPriceLimitX96: BigInt(0), // No price limit
     };
 
     // Encode the function call
     const data = encodeFunctionData({
-      abi: SWAPX_ROUTER_ABI,
+      abi: HYPERSWAP_V3_ROUTER_ABI,
       functionName: 'exactInputSingle',
       args: [params],
     });
@@ -221,12 +183,13 @@ export class SwapXDex extends BaseDex {
   private async getAmountOutMinimum(amountIn: bigint, slippagePercent: number): Promise<bigint> {
     try {
       const result = await this.publicClient.readContract({
-        address: DEX_CONTRACTS.SWAPX.QUOTER as Address,
-        abi: SWAPX_QUOTER_ABI,
+        address: DEX_CONTRACTS.HYPERSWAP.V3_QUOTER as Address,
+        abi: HYPERSWAP_V3_QUOTER_ABI,
         functionName: 'quoteExactInputSingle',
         args: [
           this.tokenInType() as Address,
           this.tokenOutType() as Address,
+          this.fee,
           amountIn,
           BigInt(0), // No price limit
         ],
@@ -244,58 +207,67 @@ export class SwapXDex extends BaseDex {
   }
 
   /**
-   * Find a pool for the given tokens
+   * Find a pool for the given tokens and fee
    * @param publicClient The public client
    * @param tokenA The first token
    * @param tokenB The second token
+   * @param fee The fee tier
    * @returns The pool address
    */
   static async findPool(
     publicClient: PublicClient,
     tokenA: Address,
-    tokenB: Address
+    tokenB: Address,
+    fee: number
   ): Promise<Address> {
     try {
+      // Sort tokens to match the factory's expected order
+      const [token0, token1] = tokenA < tokenB ? [tokenA, tokenB] : [tokenB, tokenA];
+
       const result = await publicClient.readContract({
-        address: DEX_CONTRACTS.SWAPX.FACTORY as Address,
-        abi: SWAPX_FACTORY_ABI,
-        functionName: 'poolByPair',
-        args: [tokenA, tokenB],
+        address: DEX_CONTRACTS.HYPERSWAP.V3_FACTORY as Address,
+        abi: HYPERSWAP_V3_FACTORY_ABI,
+        functionName: 'getPool',
+        args: [token0, token1, fee],
       });
 
       return result as Address;
     } catch (error) {
       console.error('Error finding pool:', error);
-      throw new Error(`Pool not found for tokens ${tokenA} and ${tokenB}`);
+      throw new Error(`Pool not found for tokens ${tokenA} and ${tokenB} with fee ${fee}`);
     }
   }
 
   /**
-   * Create a pool object for the given tokens
+   * Create a pool object for the given tokens and fee
    * @param publicClient The public client
    * @param walletClient The wallet client
    * @param tokenA The first token
    * @param tokenB The second token
-   * @returns The SwapX DEX instance
+   * @param fee The fee tier
+   * @returns The HyperSwap V3 DEX instance
    */
   static async createPool(
     publicClient: PublicClient,
     walletClient: WalletClient,
     tokenA: Token,
-    tokenB: Token
-  ): Promise<SwapXDex> {
-    const poolAddress = await SwapXDex.findPool(
+    tokenB: Token,
+    fee: number
+  ): Promise<HyperSwapV3Dex> {
+    const poolAddress = await HyperSwapV3Dex.findPool(
       publicClient,
       tokenA.address as Address,
-      tokenB.address as Address
+      tokenB.address as Address,
+      fee
     );
 
     const pool: Pool = {
-      protocol: Protocol.SwapX,
+      protocol: Protocol.HyperSwapV3,
       address: poolAddress,
       tokens: [tokenA, tokenB],
+      fee,
     };
 
-    return new SwapXDex(pool, publicClient, walletClient);
+    return new HyperSwapV3Dex(pool, publicClient, walletClient);
   }
 }

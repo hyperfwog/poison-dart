@@ -1,9 +1,9 @@
+import type { Executor } from 'frogberry';
 /**
  * Transaction executor for the arbitrage bot
  */
-import { WalletClient, PublicClient } from 'viem';
-import { Executor } from '../libs/burberry';
-import { ActionType, type Action } from './types.js';
+import type { PublicClient, WalletClient } from 'viem';
+import { type Action, ActionType } from './types';
 
 /**
  * Executor for sending transactions

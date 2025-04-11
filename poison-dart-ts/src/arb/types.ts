@@ -1,8 +1,8 @@
+import type { TelegramMessage } from 'frogberry/utils/telegram';
 /**
  * Types for the arbitrage bot
  */
-import { type Block, type Log, type Transaction, type Hash } from 'viem';
-import { type Message } from '../libs/burberry/executor';
+import type { Block, Hash, Log, Transaction } from 'viem';
 
 /**
  * Event types that can be processed by the arbitrage strategy
@@ -16,7 +16,7 @@ export enum EventType {
 /**
  * Event union type for all events that can be processed by the arbitrage strategy
  */
-export type Event = 
+export type Event =
   | { type: EventType.Block; data: Block }
   | { type: EventType.Transaction; data: Transaction }
   | { type: EventType.Log; data: Log };
@@ -34,7 +34,7 @@ export enum ActionType {
  */
 export type Action =
   | { type: ActionType.ExecuteTransaction; data: string } // Transaction data as hex string
-  | { type: ActionType.NotifyViaTelegram; data: Message };
+  | { type: ActionType.NotifyViaTelegram; data: TelegramMessage };
 
 /**
  * Source of an arbitrage opportunity
@@ -59,6 +59,10 @@ export interface Token {
 export enum Protocol {
   Shadow = 'Shadow',
   SwapX = 'SwapX',
+  KittenSwap = 'KittenSwap',
+  KittenSwapStable = 'KittenSwapStable',
+  HyperSwapV2 = 'HyperSwapV2',
+  HyperSwapV3 = 'HyperSwapV3',
 }
 
 /**

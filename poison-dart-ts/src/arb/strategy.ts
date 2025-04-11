@@ -1,12 +1,11 @@
+import type { ActionSubmitter, Strategy } from 'frogberry';
 /**
  * Arbitrage strategy implementation
  */
-import { PublicClient, WalletClient, type Block, type Log, type Transaction, type Address } from 'viem';
-import { Strategy, ActionSubmitter } from '../libs/burberry';
-import { EventType, ActionType, type Event, type Action, Protocol } from './types';
-import { Path, type Dex } from './defi';
-import { ShadowDex } from './defi';
-import { SwapXDex } from './defi';
+import type { Address, Block, Log, PublicClient, Transaction, WalletClient } from 'viem';
+import { type Dex, Path } from './defi';
+import { HyperSwapV2Dex, HyperSwapV3Dex, KittenSwapDex, ShadowDex, SwapXDex } from './defi';
+import { type Action, ActionType, type Event, EventType, Protocol } from './types';
 
 /**
  * Arbitrage strategy
@@ -14,11 +13,13 @@ import { SwapXDex } from './defi';
 export class ArbStrategy implements Strategy<Event, Action> {
   private readonly publicClient: PublicClient;
   private readonly walletClient: WalletClient;
+  private readonly config: any;
   private knownDexes: Map<string, Dex> = new Map();
 
-  constructor(publicClient: PublicClient, walletClient: WalletClient) {
+  constructor(publicClient: PublicClient, walletClient: WalletClient, config: any) {
     this.publicClient = publicClient;
     this.walletClient = walletClient;
+    this.config = config;
   }
 
   name(): string {
@@ -52,6 +53,8 @@ export class ArbStrategy implements Strategy<Event, Action> {
     submitter.submit({
       type: ActionType.NotifyViaTelegram,
       data: {
+        botToken: this.config.telegram?.botToken || '',
+        chatId: this.config.telegram?.chatId || '',
         text: `New block: ${block.number} with ${block.transactions.length} transactions`,
       },
     });
@@ -67,10 +70,15 @@ export class ArbStrategy implements Strategy<Event, Action> {
 
     // In a real implementation, we would look for swap events and update our price models
     // For this example, we'll just send a notification for USDC transfers
-    if (log.address === '0x04068DA6C83AFCFA0e13ba15A6696662335D5B75' && log.topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef') {
+    if (
+      log.address === '0x04068DA6C83AFCFA0e13ba15A6696662335D5B75' &&
+      log.topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+    ) {
       submitter.submit({
         type: ActionType.NotifyViaTelegram,
         data: {
+          botToken: this.config.telegram?.botToken || '',
+          chatId: this.config.telegram?.chatId || '',
           text: `USDC transfer detected in transaction ${log.transactionHash}`,
         },
       });
@@ -82,19 +90,15 @@ export class ArbStrategy implements Strategy<Event, Action> {
    * @param tx The new transaction
    * @param submitter The action submitter
    */
-  private async processTransaction(tx: Transaction, submitter: ActionSubmitter<Action>): Promise<void> {
+  private async processTransaction(
+    tx: Transaction,
+    submitter: ActionSubmitter<Action>
+  ): Promise<void> {
     console.log(`Processing transaction ${tx.hash}`);
 
     // In a real implementation, we would look for pending swaps and try to front-run them
-    // For this example, we'll just send a notification for high-value transactions
-    if (tx.value > BigInt(1000000000000000000)) { // > 1 ETH
-      submitter.submit({
-        type: ActionType.NotifyViaTelegram,
-        data: {
-          text: `High-value transaction detected: ${tx.hash} with value ${tx.value}`,
-        },
-      });
-    }
+    // For now, we'll just log the transaction hash
+    // We've disabled high-value transaction notifications as requested
   }
 
   /**
@@ -112,62 +116,186 @@ export class ArbStrategy implements Strategy<Event, Action> {
       return [this.knownDexes.get(key)!];
     }
 
+    // Check if we're on HyperEVM chain
+    const isHyperEVM = this.config.chainId === 999;
+
     // In a real implementation, we would query the DEX factories to find pools
     // For this example, we'll just return a hardcoded list
-    try {
-      // Try to find a Shadow DEX pool
-      const shadowPool = await ShadowDex.findPool(
-        this.publicClient,
-        tokenInType as Address,
-        tokenOutType as Address,
-        3000 // 0.3% fee
-      );
-      
-      const shadowDex = new ShadowDex(
-        {
-          protocol: Protocol.Shadow,
-          address: shadowPool,
-          tokens: [
-            { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
-            { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
-          ],
-          fee: 3000,
-        },
-        this.publicClient,
-        this.walletClient
-      );
-      
-      dexes.push(shadowDex);
-      this.knownDexes.set(key, shadowDex);
-    } catch (error) {
-      console.log(`No Shadow DEX pool found for ${tokenInType}-${tokenOutType}`);
-    }
+    if (!isHyperEVM) {
+      // Sonic chain DEXes
+      try {
+        // Try to find a Shadow DEX pool
+        const shadowPool = await ShadowDex.findPool(
+          this.publicClient,
+          tokenInType as Address,
+          tokenOutType as Address,
+          3000 // 0.3% fee
+        );
 
-    try {
-      // Try to find a SwapX DEX pool
-      const swapXPool = await SwapXDex.findPool(
-        this.publicClient,
-        tokenInType as Address,
-        tokenOutType as Address
-      );
-      
-      const swapXDex = new SwapXDex(
-        {
-          protocol: Protocol.SwapX,
-          address: swapXPool,
-          tokens: [
-            { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
-            { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
-          ],
-        },
-        this.publicClient,
-        this.walletClient
-      );
-      
-      dexes.push(swapXDex);
-      this.knownDexes.set(key, swapXDex);
-    } catch (error) {
-      console.log(`No SwapX DEX pool found for ${tokenInType}-${tokenOutType}`);
+        const shadowDex = new ShadowDex(
+          {
+            protocol: Protocol.Shadow,
+            address: shadowPool,
+            tokens: [
+              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
+              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
+            ],
+            fee: 3000,
+          },
+          this.publicClient,
+          this.walletClient
+        );
+
+        dexes.push(shadowDex);
+        this.knownDexes.set(key, shadowDex);
+      } catch (error) {
+        console.log(`No Shadow DEX pool found for ${tokenInType}-${tokenOutType}`);
+      }
+
+      try {
+        // Try to find a SwapX DEX pool
+        const swapXPool = await SwapXDex.findPool(
+          this.publicClient,
+          tokenInType as Address,
+          tokenOutType as Address
+        );
+
+        const swapXDex = new SwapXDex(
+          {
+            protocol: Protocol.SwapX,
+            address: swapXPool,
+            tokens: [
+              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
+              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
+            ],
+          },
+          this.publicClient,
+          this.walletClient
+        );
+
+        dexes.push(swapXDex);
+        this.knownDexes.set(key, swapXDex);
+      } catch (error) {
+        console.log(`No SwapX DEX pool found for ${tokenInType}-${tokenOutType}`);
+      }
+    } else {
+      // HyperEVM chain DEXes
+      try {
+        // Try to find a KittenSwap volatile pool
+        const kittenSwapPool = await KittenSwapDex.findPool(
+          this.publicClient,
+          tokenInType as Address,
+          tokenOutType as Address,
+          false // volatile pool
+        );
+
+        const kittenSwapDex = new KittenSwapDex(
+          {
+            protocol: Protocol.KittenSwap,
+            address: kittenSwapPool,
+            tokens: [
+              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
+              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
+            ],
+          },
+          this.publicClient,
+          this.walletClient
+        );
+
+        dexes.push(kittenSwapDex);
+        this.knownDexes.set(key, kittenSwapDex);
+      } catch (error) {
+        console.log(`No KittenSwap volatile pool found for ${tokenInType}-${tokenOutType}`);
+      }
+
+      try {
+        // Try to find a KittenSwap stable pool
+        const kittenSwapStablePool = await KittenSwapDex.findPool(
+          this.publicClient,
+          tokenInType as Address,
+          tokenOutType as Address,
+          true // stable pool
+        );
+
+        const kittenSwapStableDex = new KittenSwapDex(
+          {
+            protocol: Protocol.KittenSwapStable,
+            address: kittenSwapStablePool,
+            tokens: [
+              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
+              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
+            ],
+          },
+          this.publicClient,
+          this.walletClient
+        );
+
+        dexes.push(kittenSwapStableDex);
+        this.knownDexes.set(`${key}-stable`, kittenSwapStableDex);
+      } catch (error) {
+        console.log(`No KittenSwap stable pool found for ${tokenInType}-${tokenOutType}`);
+      }
+
+      // Try to find HyperSwap V2 pool
+      try {
+        const hyperSwapV2Pool = await HyperSwapV2Dex.findPool(
+          this.publicClient,
+          tokenInType as Address,
+          tokenOutType as Address
+        );
+
+        const hyperSwapV2Dex = new HyperSwapV2Dex(
+          {
+            protocol: Protocol.HyperSwapV2,
+            address: hyperSwapV2Pool,
+            tokens: [
+              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
+              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
+            ],
+          },
+          this.publicClient,
+          this.walletClient
+        );
+
+        dexes.push(hyperSwapV2Dex);
+        this.knownDexes.set(`${key}-hyperv2`, hyperSwapV2Dex);
+      } catch (error) {
+        console.log(`No HyperSwap V2 pool found for ${tokenInType}-${tokenOutType}`);
+      }
+
+      // Try to find HyperSwap V3 pools with different fee tiers
+      const feeTiers = [500, 3000, 10000]; // 0.05%, 0.3%, 1%
+      for (const fee of feeTiers) {
+        try {
+          const hyperSwapV3Pool = await HyperSwapV3Dex.findPool(
+            this.publicClient,
+            tokenInType as Address,
+            tokenOutType as Address,
+            fee
+          );
+
+          const hyperSwapV3Dex = new HyperSwapV3Dex(
+            {
+              protocol: Protocol.HyperSwapV3,
+              address: hyperSwapV3Pool,
+              tokens: [
+                { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
+                { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
+              ],
+              fee,
+            },
+            this.publicClient,
+            this.walletClient
+          );
+
+          dexes.push(hyperSwapV3Dex);
+          this.knownDexes.set(`${key}-hyperv3-${fee}`, hyperSwapV3Dex);
+        } catch (error) {
+          console.log(
+            `No HyperSwap V3 pool found for ${tokenInType}-${tokenOutType} with fee ${fee}`
+          );
+        }
+      }
     }
 
     return dexes;
@@ -184,20 +312,20 @@ export class ArbStrategy implements Strategy<Event, Action> {
     }
 
     const dexes: Dex[] = [];
-    
+
     // Find DEXes for each pair in the path
     for (let i = 0; i < path.length - 1; i++) {
       const tokenIn = path[i];
       const tokenOut = path[i + 1];
-      
+
       const dexesForPair = await this.findDexes(tokenIn, tokenOut);
       if (dexesForPair.length === 0) {
         return new Path();
       }
-      
+
       dexes.push(dexesForPair[0]);
     }
-    
+
     return new Path(dexes);
   }
 }
