@@ -149,7 +149,7 @@ export class HyperSwapV3Dex extends BaseDex {
    * @param amountIn The amount of tokens to swap
    * @returns The transaction data
    */
-  async swapTx(sender: Address, recipient: Address, amountIn: bigint): Promise<string> {
+  async swapTx(_sender: Address, recipient: Address, amountIn: bigint): Promise<string> {
     // Get the current timestamp plus 20 minutes for the deadline
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
 
@@ -200,7 +200,7 @@ export class HyperSwapV3Dex extends BaseDex {
       });
 
       // Apply slippage to the amount out
-      const amountOut = (result as any[])[0] as bigint;
+      const amountOut = (result as [bigint, unknown, unknown, unknown])[0];
       const slippageFactor = BigInt(Math.floor((100 - slippagePercent) * 1000)) / BigInt(1000);
       return (amountOut * slippageFactor) / BigInt(100);
     } catch (error) {

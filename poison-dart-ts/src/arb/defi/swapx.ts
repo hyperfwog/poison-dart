@@ -167,7 +167,9 @@ export class SwapXDex extends BaseDex {
       });
 
       // Fee is in basis points (1/100 of a percent)
-      this.fee = Number((result as any[])[2]) / 10000;
+      this.fee =
+        Number((result as [unknown, unknown, number, unknown, unknown, unknown, unknown])[2]) /
+        10000;
       return this.fee;
     } catch (error) {
       logger.error('Error getting fee:', error);
@@ -182,7 +184,7 @@ export class SwapXDex extends BaseDex {
    * @param amountIn The amount of tokens to swap
    * @returns The transaction data
    */
-  async swapTx(sender: Address, recipient: Address, amountIn: bigint): Promise<string> {
+  async swapTx(_sender: Address, recipient: Address, amountIn: bigint): Promise<string> {
     // Get the current timestamp plus 20 minutes for the deadline
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
 
@@ -231,7 +233,7 @@ export class SwapXDex extends BaseDex {
       });
 
       // Apply slippage to the amount out
-      const amountOut = (result as any[])[0] as bigint;
+      const amountOut = (result as [bigint, unknown, unknown, unknown])[0];
       const slippageFactor = BigInt(Math.floor((100 - slippagePercent) * 1000)) / BigInt(1000);
       return (amountOut * slippageFactor) / BigInt(100);
     } catch (error) {

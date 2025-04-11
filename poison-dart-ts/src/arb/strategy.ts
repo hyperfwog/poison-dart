@@ -17,10 +17,14 @@ const logger = Logger.forContext('Strategy');
 export class ArbStrategy implements Strategy<Event, Action> {
   private readonly publicClient: PublicClient;
   private readonly walletClient: WalletClient;
-  private readonly config: any;
+  private readonly config: Record<string, unknown>;
   private knownDexes: Map<string, Dex> = new Map();
 
-  constructor(publicClient: PublicClient, walletClient: WalletClient, config: any) {
+  constructor(
+    publicClient: PublicClient,
+    walletClient: WalletClient,
+    config: Record<string, unknown>
+  ) {
     this.publicClient = publicClient;
     this.walletClient = walletClient;
     this.config = config;
@@ -96,7 +100,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
    */
   private async processTransaction(
     tx: Transaction,
-    submitter: ActionSubmitter<Action>
+    _submitter: ActionSubmitter<Action>
   ): Promise<void> {
     logger.info(`Processing transaction ${tx.hash}`);
 
@@ -152,7 +156,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
 
         dexes.push(shadowDex);
         this.knownDexes.set(key, shadowDex);
-      } catch (error) {
+      } catch (_error) {
         logger.debug(`No Shadow DEX pool found for ${tokenInType}-${tokenOutType}`);
       }
 
@@ -179,7 +183,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
 
         dexes.push(swapXDex);
         this.knownDexes.set(key, swapXDex);
-      } catch (error) {
+      } catch (_error) {
         logger.debug(`No SwapX DEX pool found for ${tokenInType}-${tokenOutType}`);
       }
     } else {
@@ -208,7 +212,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
 
         dexes.push(kittenSwapDex);
         this.knownDexes.set(key, kittenSwapDex);
-      } catch (error) {
+      } catch (_error) {
         logger.debug(`No KittenSwap volatile pool found for ${tokenInType}-${tokenOutType}`);
       }
 
@@ -236,7 +240,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
 
         dexes.push(kittenSwapStableDex);
         this.knownDexes.set(`${key}-stable`, kittenSwapStableDex);
-      } catch (error) {
+      } catch (_error) {
         logger.debug(`No KittenSwap stable pool found for ${tokenInType}-${tokenOutType}`);
       }
 
@@ -263,7 +267,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
 
         dexes.push(hyperSwapV2Dex);
         this.knownDexes.set(`${key}-hyperv2`, hyperSwapV2Dex);
-      } catch (error) {
+      } catch (_error) {
         logger.debug(`No HyperSwap V2 pool found for ${tokenInType}-${tokenOutType}`);
       }
 
@@ -294,7 +298,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
 
           dexes.push(hyperSwapV3Dex);
           this.knownDexes.set(`${key}-hyperv3-${fee}`, hyperSwapV3Dex);
-        } catch (error) {
+        } catch (_error) {
           logger.debug(
             `No HyperSwap V3 pool found for ${tokenInType}-${tokenOutType} with fee ${fee}`
           );

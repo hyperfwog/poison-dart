@@ -181,9 +181,9 @@ export class Logger {
 
     // Log the message with the prefix
     if (args.length > 0) {
-      console.log(`${prefix}${message}`, ...args);
+      console.info(`${prefix}${message}`, ...args);
     } else {
-      console.log(`${prefix}${message}`);
+      console.info(`${prefix}${message}`);
     }
   }
 
