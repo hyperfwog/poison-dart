@@ -75,5 +75,45 @@
       ],
       "fee": 500
     }
+  },
+  {
+    "key": "HyperSwapV3-0x1000000000000000000000000000000000000000",
+    "pool": {
+      "protocol": "HyperSwapV3",
+      "address": "0x1000000000000000000000000000000000000000",
+      "tokens": [
+        {
+          "address": "0x5555555555555555555555555555555555555555",
+          "symbol": "HYPE",
+          "decimals": 18
+        },
+        {
+          "address": "0x3f244819a8359145a8e7cf0272955e4918a50627",
+          "symbol": "TOKEN",
+          "decimals": 18
+        }
+      ],
+      "fee": 10000
+    }
+  },
+  {
+    "key": "HyperSwapV3-0x2000000000000000000000000000000000000000",
+    "pool": {
+      "protocol": "HyperSwapV3",
+      "address": "0x2000000000000000000000000000000000000000",
+      "tokens": [
+        {
+          "address": "0x5555555555555555555555555555555555555555",
+          "symbol": "HYPE",
+          "decimals": 18
+        },
+        {
+          "address": "0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38",
+          "symbol": "0x039e",
+          "decimals": 18
+        }
+      ],
+      "fee": 3000
+    }
   }
 ]

@@ -199,6 +199,14 @@ export class TokenGraph {
   }
 
   /**
+   * Get all tokens in the graph
+   * @returns Array of token nodes
+   */
+  getTokens(): TokenNode[] {
+    return Array.from(this.graph.values());
+  }
+
+  /**
    * Get token information (symbol and decimals)
    * @param token Token address
    * @returns Token information

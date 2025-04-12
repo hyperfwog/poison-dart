@@ -96,9 +96,79 @@ ROUTER_MAP.set(DEX_CONTRACTS.KITTENSWAP.V3_ROUTER.toLowerCase(), {
   protocol: Protocol.KittenSwap,
 });
 
+// Unknown DEX Router 1 (Uniswap V3-like)
+ROUTER_MAP.set(DEX_CONTRACTS.UNKNOWN_DEXES.ROUTER_1.toLowerCase(), {
+  parser: HyperSwapV3Dex.parseTransaction, // Use the HyperSwapV3 parser since it's Uniswap V3-like
+  name: 'Unknown DEX Router 1 (Uniswap V3-like)',
+  protocol: Protocol.Unknown,
+});
+
 // Unknown DEX Router 2
 ROUTER_MAP.set(DEX_CONTRACTS.UNKNOWN_DEXES.ROUTER_2.toLowerCase(), {
-  parser: async () => null, // No parser implemented yet
+  parser: async (_client, input) => {
+    // Function signature for Unknown DEX Router 2
+    const unknownFunction = '0xdd10b14e';
+
+    // Check function signature
+    const signature = input.slice(0, 10);
+
+    if (signature === unknownFunction) {
+      logger.info('Transaction to Unknown DEX Router 2 with function signature: 0xdd10b14e');
+
+      try {
+        // Try to extract token addresses from the input data
+        // This is a simplified approach and may need to be adjusted based on the actual data format
+
+        // Assuming the input data contains token addresses somewhere
+        // We'll scan the input data for potential token addresses
+        // This is a heuristic approach and may not always work
+
+        // Look for potential token addresses in the input data
+        // Ethereum addresses are 20 bytes (40 hex characters) long
+        const potentialAddresses: string[] = [];
+
+        // Scan the input data in 32-byte chunks (64 hex characters)
+        for (let i = 10; i < input.length - 40; i += 2) {
+          // Check if this could be the start of an address (0x...)
+          const potentialAddress = `0x${input.slice(i + 24, i + 64)}`;
+
+          // Simple validation: check if it looks like an address
+          if (/^0x[0-9a-fA-F]{40}$/.test(potentialAddress)) {
+            potentialAddresses.push(potentialAddress);
+          }
+        }
+
+        // If we found at least two addresses, assume they are tokenIn and tokenOut
+        if (potentialAddresses.length >= 2) {
+          // For simplicity, we'll assume the first address is tokenIn and the second is tokenOut
+          const tokenIn = potentialAddresses[0] as `0x${string}` as Address;
+          const tokenOut = potentialAddresses[1] as `0x${string}` as Address;
+
+          // We don't know the exact amount, so we'll use a placeholder
+          const amountIn = BigInt(0);
+
+          logger.info('Extracted potential tokens from Unknown DEX Router 2 transaction:');
+          logger.info(`  TokenIn: ${tokenIn}`);
+          logger.info(`  TokenOut: ${tokenOut}`);
+
+          return {
+            protocol: Protocol.Unknown,
+            tokenIn,
+            tokenOut,
+            amountIn,
+            amountOut: BigInt(0),
+            poolAddress: '0x0000000000000000000000000000000000000000' as Address,
+          };
+        }
+
+        logger.info('Could not extract token addresses from Unknown DEX Router 2 transaction');
+      } catch (error) {
+        logger.error(`Error parsing Unknown DEX Router 2 transaction: ${error}`);
+      }
+    }
+
+    return null;
+  },
   name: 'Unknown DEX Router 2',
   protocol: Protocol.Unknown,
 });

@@ -47,7 +47,33 @@ async function debugArbitrage(txHash: string) {
 
   // Create arbitrage finder with enhanced debugging
   const finder = new ArbitrageFinderDebug(publicClient, walletClient, config);
+
+  // Log the finder object to see its structure
+  logger.info('ArbitrageFinderDebug instance created');
+  logger.info(`Finder type: ${typeof finder}`);
+  logger.info(`Finder properties: ${Object.keys(finder).join(', ')}`);
+
   await finder.initialize();
+
+  // Log the finder object after initialization
+  logger.info('ArbitrageFinderDebug instance initialized');
+  logger.info(`Finder properties after init: ${Object.keys(finder).join(', ')}`);
+
+  // Try to directly access the knownPools property
+  const finderAny = finder as any;
+  if (finderAny.knownPools) {
+    logger.info(`knownPools exists with ${finderAny.knownPools.size} entries`);
+    logger.info(`knownPools keys: ${Array.from(finderAny.knownPools.keys()).join(', ')}`);
+  } else {
+    logger.info('knownPools property does not exist');
+  }
+
+  // Try to directly access the tokenGraph property
+  if (finderAny.tokenGraph) {
+    logger.info(`tokenGraph exists with size ${finderAny.tokenGraph.size}`);
+  } else {
+    logger.info('tokenGraph property does not exist');
+  }
 
   try {
     // Get transaction
@@ -104,13 +130,38 @@ async function debugArbitrage(txHash: string) {
  * Enhanced version of ArbitrageFinder with detailed logging
  */
 class ArbitrageFinderDebug extends ArbitrageFinder {
-  // Add protected properties to access parent class properties
-  protected get pools(): any[] {
-    return (this as any).poolCache?.pools || [];
+  // Access to the core finder
+  private get coreFinder(): any {
+    // Access the finder property of the ArbitrageFinder class
+    return (this as any).finder;
   }
 
+  // Helper to get pools for debugging
+  protected get pools(): any[] {
+    try {
+      // Access the knownPools Map from the core finder
+      if (this.coreFinder?.knownPools) {
+        return Array.from(this.coreFinder.knownPools.values());
+      }
+      return [];
+    } catch (error) {
+      logger.error(`Error accessing pools: ${error}`);
+      return [];
+    }
+  }
+
+  // Helper to get tokens for debugging
   protected get tokens(): any[] {
-    return (this as any).tokenCache?.tokens || [];
+    try {
+      // Access the tokenGraph from the core finder
+      if (this.coreFinder?.tokenGraph) {
+        return this.coreFinder.tokenGraph.getTokens();
+      }
+      return [];
+    } catch (error) {
+      logger.error(`Error accessing tokens: ${error}`);
+      return [];
+    }
   }
 
   /**
