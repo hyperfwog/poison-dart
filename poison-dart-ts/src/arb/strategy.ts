@@ -2,11 +2,10 @@ import type { ActionSubmitter, Strategy } from 'frogberry';
 /**
  * Arbitrage strategy implementation
  */
-import type { Address, Block, Log, PublicClient, Transaction, WalletClient } from 'viem';
+import type { Block, Log, PublicClient, Transaction, WalletClient } from 'viem';
 import { Logger } from '../libs/logger';
 import type { ArbConfig } from './config';
-import { type Dex, Path } from './defi';
-import { HyperSwapV2Dex, HyperSwapV3Dex, KittenSwapDex, ShadowDex, SwapXDex } from './defi';
+import { ArbitrageFinder, ArbitrageOpportunity } from './core';
 import { type Action, ActionType, type Event, EventType, Protocol } from './types';
 
 // Create a logger instance for the strategy
@@ -19,12 +18,14 @@ export class ArbStrategy implements Strategy<Event, Action> {
   private readonly publicClient: PublicClient;
   private readonly walletClient: WalletClient;
   private readonly config: ArbConfig;
-  private knownDexes: Map<string, Dex> = new Map();
+  private readonly finder: ArbitrageFinder;
+  private isInitialized: boolean = false;
 
   constructor(publicClient: PublicClient, walletClient: WalletClient, config: ArbConfig) {
     this.publicClient = publicClient;
     this.walletClient = walletClient;
     this.config = config;
+    this.finder = new ArbitrageFinder(publicClient, walletClient, config);
   }
 
   name(): string {
@@ -32,6 +33,12 @@ export class ArbStrategy implements Strategy<Event, Action> {
   }
 
   async processEvent(event: Event, submitter: ActionSubmitter<Action>): Promise<void> {
+    // Initialize the arbitrage finder if not already initialized
+    if (!this.isInitialized) {
+      await this.initialize();
+      this.isInitialized = true;
+    }
+
     switch (event.type) {
       case EventType.Block:
         await this.processBlock(event.data, submitter);
@@ -46,6 +53,15 @@ export class ArbStrategy implements Strategy<Event, Action> {
   }
 
   /**
+   * Initialize the arbitrage finder
+   */
+  private async initialize(): Promise<void> {
+    logger.info('Initializing arbitrage finder...');
+    await this.finder.initialize();
+    logger.info('Arbitrage finder initialized');
+  }
+
+  /**
    * Process a new block
    * @param block The new block
    * @param submitter The action submitter
@@ -53,8 +69,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
   private async processBlock(block: Block, submitter: ActionSubmitter<Action>): Promise<void> {
     logger.info(`Processing block ${block.number}`);
 
-    // In a real implementation, we would scan for arbitrage opportunities here
-    // For this example, we'll just send a notification
+    // For now, we'll just send a notification
     submitter.submit({
       type: ActionType.NotifyViaTelegram,
       data: {
@@ -73,8 +88,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
   private async processLog(log: Log, submitter: ActionSubmitter<Action>): Promise<void> {
     logger.info(`Processing log from ${log.address}`);
 
-    // In a real implementation, we would look for swap events and update our price models
-    // For this example, we'll just send a notification for USDC transfers
+    // For now, we'll just send a notification for USDC transfers
     if (
       log.address === '0x04068DA6C83AFCFA0e13ba15A6696662335D5B75' &&
       log.topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -97,240 +111,189 @@ export class ArbStrategy implements Strategy<Event, Action> {
    */
   private async processTransaction(
     tx: Transaction,
-    _submitter: ActionSubmitter<Action>
+    submitter: ActionSubmitter<Action>
   ): Promise<void> {
     logger.info(`Processing transaction ${tx.hash}`);
 
-    // In a real implementation, we would look for pending swaps and try to front-run them
-    // For now, we'll just log the transaction hash
-    // We've disabled high-value transaction notifications as requested
-  }
-
-  /**
-   * Find DEXes that support trading between the given token types
-   * @param tokenInType The token type to trade from
-   * @param tokenOutType The token type to trade to
-   * @returns A list of DEXes
-   */
-  private async findDexes(tokenInType: string, tokenOutType: string): Promise<Dex[]> {
-    const dexes: Dex[] = [];
-
-    // Check if we already know about DEXes for this pair
-    const key = `${tokenInType}-${tokenOutType}`;
-    if (this.knownDexes.has(key)) {
-      return [this.knownDexes.get(key)!];
+    // Skip if transaction has no input data
+    if (!tx.input || tx.input === '0x') {
+      return;
     }
 
-    // Check if we're on HyperEVM chain
-    const isHyperEVM = this.config.chainId === 999;
+    // Check if the transaction is to a known router
+    const to = tx.to;
+    if (!to) {
+      return;
+    }
 
-    // In a real implementation, we would query the DEX factories to find pools
-    // For this example, we'll just return a hardcoded list
-    if (!isHyperEVM) {
-      // Sonic chain DEXes
-      try {
-        // Try to find a Shadow DEX pool
-        const shadowPool = await ShadowDex.findPool(
-          this.publicClient,
-          tokenInType as Address,
-          tokenOutType as Address,
-          3000 // 0.3% fee
-        );
-
-        const shadowDex = new ShadowDex(
-          {
-            protocol: Protocol.Shadow,
-            address: shadowPool,
-            tokens: [
-              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
-              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
-            ],
-            fee: 3000,
-          },
-          this.publicClient,
-          this.walletClient
-        );
-
-        dexes.push(shadowDex);
-        this.knownDexes.set(key, shadowDex);
-      } catch (_error) {
-        logger.debug(`No Shadow DEX pool found for ${tokenInType}-${tokenOutType}`);
+    // Try to parse the transaction as a swap
+    const swapInfo = await this.finder.parseTransaction(tx);
+    
+    // Log all detected swaps, even if they don't lead to arbitrage opportunities
+    if (swapInfo) {
+      const protocolName = Protocol[swapInfo.protocol];
+      logger.info(
+        `Detected ${protocolName} swap in tx ${tx.hash}: ${swapInfo.tokenIn} -> ${swapInfo.tokenOut} (amount: ${swapInfo.amountIn})`
+      );
+      
+      // Find arbitrage opportunities
+      const opportunities = await this.finder.findArbitrageOpportunities(swapInfo);
+      
+      // Log the opportunities
+      if (opportunities.length > 0) {
+        await this.logArbitrageOpportunities(opportunities, tx.hash, submitter);
+        
+        // Execute the best opportunity if auto-execution is enabled
+        if (this.config.autoExecute && opportunities[0].expectedProfit > this.config.minProfitThreshold) {
+          await this.executeArbitrageOpportunity(opportunities[0], tx.hash, submitter);
+        }
+      } else {
+        logger.info(`No profitable arbitrage opportunities found for swap in tx ${tx.hash}`);
       }
-
-      try {
-        // Try to find a SwapX DEX pool
-        const swapXPool = await SwapXDex.findPool(
-          this.publicClient,
-          tokenInType as Address,
-          tokenOutType as Address
+      
+      // Log golden search progress if applicable
+      if (this.config.optimizeInputAmount && opportunities.length > 0) {
+        logger.info(`Running golden section search for optimal input amount for tx ${tx.hash}...`);
+        const optimizedOpportunity = await this.finder.optimizeOpportunity(opportunities[0]);
+        logger.info(
+          `Optimized opportunity: ${optimizedOpportunity.expectedProfit} profit with input ${optimizedOpportunity.inputAmount}`
         );
-
-        const swapXDex = new SwapXDex(
-          {
-            protocol: Protocol.SwapX,
-            address: swapXPool,
-            tokens: [
-              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
-              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
-            ],
-          },
-          this.publicClient,
-          this.walletClient
-        );
-
-        dexes.push(swapXDex);
-        this.knownDexes.set(key, swapXDex);
-      } catch (_error) {
-        logger.debug(`No SwapX DEX pool found for ${tokenInType}-${tokenOutType}`);
-      }
-    } else {
-      // HyperEVM chain DEXes
-      try {
-        // Try to find a KittenSwap volatile pool
-        const kittenSwapPool = await KittenSwapDex.findPool(
-          this.publicClient,
-          tokenInType as Address,
-          tokenOutType as Address,
-          false // volatile pool
-        );
-
-        const kittenSwapDex = new KittenSwapDex(
-          {
-            protocol: Protocol.KittenSwap,
-            address: kittenSwapPool,
-            tokens: [
-              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
-              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
-            ],
-          },
-          this.publicClient,
-          this.walletClient
-        );
-
-        dexes.push(kittenSwapDex);
-        this.knownDexes.set(key, kittenSwapDex);
-      } catch (_error) {
-        logger.debug(`No KittenSwap volatile pool found for ${tokenInType}-${tokenOutType}`);
-      }
-
-      try {
-        // Try to find a KittenSwap stable pool
-        const kittenSwapStablePool = await KittenSwapDex.findPool(
-          this.publicClient,
-          tokenInType as Address,
-          tokenOutType as Address,
-          true // stable pool
-        );
-
-        const kittenSwapStableDex = new KittenSwapDex(
-          {
-            protocol: Protocol.KittenSwapStable,
-            address: kittenSwapStablePool,
-            tokens: [
-              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
-              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
-            ],
-          },
-          this.publicClient,
-          this.walletClient
-        );
-
-        dexes.push(kittenSwapStableDex);
-        this.knownDexes.set(`${key}-stable`, kittenSwapStableDex);
-      } catch (_error) {
-        logger.debug(`No KittenSwap stable pool found for ${tokenInType}-${tokenOutType}`);
-      }
-
-      // Try to find HyperSwap V2 pool
-      try {
-        const hyperSwapV2Pool = await HyperSwapV2Dex.findPool(
-          this.publicClient,
-          tokenInType as Address,
-          tokenOutType as Address
-        );
-
-        const hyperSwapV2Dex = new HyperSwapV2Dex(
-          {
-            protocol: Protocol.HyperSwapV2,
-            address: hyperSwapV2Pool,
-            tokens: [
-              { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
-              { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
-            ],
-          },
-          this.publicClient,
-          this.walletClient
-        );
-
-        dexes.push(hyperSwapV2Dex);
-        this.knownDexes.set(`${key}-hyperv2`, hyperSwapV2Dex);
-      } catch (_error) {
-        logger.debug(`No HyperSwap V2 pool found for ${tokenInType}-${tokenOutType}`);
-      }
-
-      // Try to find HyperSwap V3 pools with different fee tiers
-      const feeTiers = [500, 3000, 10000]; // 0.05%, 0.3%, 1%
-      for (const fee of feeTiers) {
-        try {
-          const hyperSwapV3Pool = await HyperSwapV3Dex.findPool(
-            this.publicClient,
-            tokenInType as Address,
-            tokenOutType as Address,
-            fee
-          );
-
-          const hyperSwapV3Dex = new HyperSwapV3Dex(
-            {
-              protocol: Protocol.HyperSwapV3,
-              address: hyperSwapV3Pool,
-              tokens: [
-                { address: tokenInType, symbol: 'TOKEN_A', decimals: 18 },
-                { address: tokenOutType, symbol: 'TOKEN_B', decimals: 18 },
-              ],
-              fee,
-            },
-            this.publicClient,
-            this.walletClient
-          );
-
-          dexes.push(hyperSwapV3Dex);
-          this.knownDexes.set(`${key}-hyperv3-${fee}`, hyperSwapV3Dex);
-        } catch (_error) {
-          logger.debug(
-            `No HyperSwap V3 pool found for ${tokenInType}-${tokenOutType} with fee ${fee}`
-          );
+        
+        // Execute the optimized opportunity if auto-execution is enabled
+        if (this.config.autoExecute && optimizedOpportunity.expectedProfit > this.config.minProfitThreshold) {
+          await this.executeArbitrageOpportunity(optimizedOpportunity, tx.hash, submitter);
         }
       }
     }
-
-    return dexes;
   }
 
   /**
-   * Find a test path for the given tokens
-   * @param path The list of token addresses to test
-   * @returns A path object
+   * Log arbitrage opportunities
+   * @param opportunities List of arbitrage opportunities
+   * @param txHash Transaction hash
+   * @param submitter Action submitter
    */
-  private async findTestPath(path: Address[]): Promise<Path> {
-    if (path.length < 2) {
-      return new Path();
-    }
-
-    const dexes: Dex[] = [];
-
-    // Find DEXes for each pair in the path
-    for (let i = 0; i < path.length - 1; i++) {
-      const tokenIn = path[i];
-      const tokenOut = path[i + 1];
-
-      const dexesForPair = await this.findDexes(tokenIn, tokenOut);
-      if (dexesForPair.length === 0) {
-        return new Path();
+  private async logArbitrageOpportunities(
+    opportunities: ArbitrageOpportunity[],
+    txHash: string,
+    submitter: ActionSubmitter<Action>
+  ): Promise<void> {
+    // Log each opportunity
+    for (const opportunity of opportunities) {
+      logger.info(
+        `Found arbitrage opportunity in tx ${txHash}: ` +
+        `${opportunity.expectedProfit} profit with ` +
+        `${opportunity.protocols.join(' -> ')}`
+      );
+      
+      // Send a notification
+      if (this.config.telegram) {
+        const message = this.formatOpportunityMessage(opportunity, txHash);
+        
+        submitter.submit({
+          type: ActionType.NotifyViaTelegram,
+          data: {
+            botToken: this.config.telegram.botToken,
+            chatId: this.config.telegram.chatId,
+            text: message,
+          },
+        });
       }
-
-      dexes.push(dexesForPair[0]);
     }
+  }
 
-    return new Path(dexes);
+  /**
+   * Format an arbitrage opportunity message
+   * @param opportunity Arbitrage opportunity
+   * @param txHash Transaction hash
+   * @returns Formatted message
+   */
+  private formatOpportunityMessage(
+    opportunity: ArbitrageOpportunity,
+    txHash: string
+  ): string {
+    // Format the profit in ETH
+    const profitEth = Number(opportunity.expectedProfit) / 1e18;
+    
+    // Format the input amount in ETH
+    const inputEth = Number(opportunity.inputAmount) / 1e18;
+    
+    // Format the gas estimate in ETH
+    const gasEth = Number(opportunity.gasEstimate) / 1e18;
+    
+    // Format the protocols
+    const protocols = opportunity.protocols.join(' -> ');
+    
+    // Format the message
+    return `🚨 Arbitrage Opportunity 🚨\n\n` +
+      `Transaction: ${txHash}\n` +
+      `Profit: ${profitEth.toFixed(6)} ETH\n` +
+      `Input: ${inputEth.toFixed(6)} ETH\n` +
+      `Gas: ${gasEth.toFixed(6)} ETH\n` +
+      `Path: ${protocols}\n` +
+      `Start Token: ${opportunity.startToken}`;
+  }
+
+  /**
+   * Execute an arbitrage opportunity
+   * @param opportunity Arbitrage opportunity to execute
+   * @param triggerTxHash Transaction hash that triggered the opportunity
+   * @param submitter Action submitter
+   */
+  private async executeArbitrageOpportunity(
+    opportunity: ArbitrageOpportunity,
+    triggerTxHash: string,
+    submitter: ActionSubmitter<Action>
+  ): Promise<void> {
+    logger.info(`Executing arbitrage opportunity from tx ${triggerTxHash}...`);
+    
+    try {
+      // Submit the transaction
+      submitter.submit({
+        type: ActionType.ExecuteTransaction,
+        data: {
+          path: opportunity.path,
+          inputAmount: opportunity.inputAmount,
+          triggerTxHash,
+        },
+      });
+      
+      logger.info(`Arbitrage transaction submitted for opportunity from tx ${triggerTxHash}`);
+      
+      // Send a notification
+      if (this.config.telegram) {
+        const message = `🚀 Executing Arbitrage 🚀\n\n` +
+          `Trigger Transaction: ${triggerTxHash}\n` +
+          `Expected Profit: ${(Number(opportunity.expectedProfit) / 1e18).toFixed(6)} ETH\n` +
+          `Path: ${opportunity.protocols.join(' -> ')}`;
+        
+        submitter.submit({
+          type: ActionType.NotifyViaTelegram,
+          data: {
+            botToken: this.config.telegram.botToken,
+            chatId: this.config.telegram.chatId,
+            text: message,
+          },
+        });
+      }
+    } catch (error) {
+      logger.error(`Error executing arbitrage opportunity: ${error}`);
+      
+      // Send a notification about the error
+      if (this.config.telegram) {
+        const message = `❌ Arbitrage Execution Failed ❌\n\n` +
+          `Trigger Transaction: ${triggerTxHash}\n` +
+          `Error: ${error}`;
+        
+        submitter.submit({
+          type: ActionType.NotifyViaTelegram,
+          data: {
+            botToken: this.config.telegram.botToken,
+            chatId: this.config.telegram.chatId,
+            text: message,
+          },
+        });
+      }
+    }
   }
 }

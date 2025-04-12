@@ -117,6 +117,8 @@ export interface ArbConfig {
   maxHops: number; // Maximum number of hops in a trade path
   maxPoolsPerHop: number; // Maximum number of pools to consider per hop
   chainId: number; // Chain ID to use (250 for Sonic, 999 for HyperEVM)
+  optimizeInputAmount?: boolean; // Whether to optimize input amount using golden section search
+  autoExecute?: boolean; // Whether to automatically execute arbitrage opportunities
 }
 
 /**
@@ -134,6 +136,8 @@ export const DEFAULT_CONFIG: Partial<ArbConfig> = {
   maxHops: 3,
   maxPoolsPerHop: 5,
   chainId: 146, // Default to Sonic
+  optimizeInputAmount: true, // Enable golden section search by default
+  autoExecute: false, // Disable auto-execution by default for safety
 };
 
 /**

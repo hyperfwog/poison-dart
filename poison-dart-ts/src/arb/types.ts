@@ -30,10 +30,19 @@ export enum ActionType {
 }
 
 /**
+ * Data for executing a transaction
+ */
+export interface ExecuteTransactionData {
+  path: any; // Path object from the arbitrage opportunity
+  inputAmount: bigint; // Amount to use for the arbitrage
+  triggerTxHash: string; // Transaction hash that triggered the arbitrage
+}
+
+/**
  * Action union type for all actions that can be executed by the arbitrage bot
  */
 export type Action =
-  | { type: ActionType.ExecuteTransaction; data: string } // Transaction data as hex string
+  | { type: ActionType.ExecuteTransaction; data: ExecuteTransactionData }
   | { type: ActionType.NotifyViaTelegram; data: TelegramMessage };
 
 /**

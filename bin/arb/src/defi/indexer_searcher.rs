@@ -13,8 +13,8 @@ use tokio::sync::OnceCell;
 use tokio::task::JoinSet;
 
 use super::{
-    aftermath::Aftermath, cetus::Cetus, deepbook_v2::DeepbookV2, flowx_clmm::FlowxClmm, turbos::Turbos, Dex,
-    DexSearcher, Path,
+    aftermath::Aftermath, cetus::Cetus, deepbook_v2::DeepbookV2, flowx_clmm::FlowxClmm, 
+    hyperswap::HyperSwap, kittenswap::KittenSwap, turbos::Turbos, Dex, DexSearcher, Path,
 };
 use crate::defi::{blue_move::BlueMove, kriya_amm::KriyaAmm, kriya_clmm::KriyaClmm};
 

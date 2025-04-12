@@ -4,7 +4,8 @@ import type { Executor } from 'frogberry';
  */
 import type { PublicClient, WalletClient } from 'viem';
 import { Logger } from '../libs/logger';
-import { type Action, ActionType } from './types';
+import { type Action, ActionType, type ExecuteTransactionData } from './types';
+import { Trader } from './defi/mod';
 
 // Create a logger instance for the executor
 const logger = Logger.forContext('Executor');
@@ -37,11 +38,19 @@ export class TransactionExecutor implements Executor<Action> {
         throw new Error('No account available in wallet client');
       }
 
-      // Send the transaction
-      const txHash = await this.walletClient.sendTransaction({
-        account: this.walletClient.account,
-        data: action.data as `0x${string}`,
-        chain: this.publicClient.chain,
+      const txData = action.data as ExecuteTransactionData;
+      logger.info(`Executing arbitrage transaction for opportunity from tx ${txData.triggerTxHash}`);
+      
+      // Create a trader instance
+      const trader = new Trader(this.publicClient, this.walletClient);
+      
+      // Execute the trade
+      const txHash = await trader.executeTrade({
+        sender: this.walletClient.account.address,
+        amountIn: txData.inputAmount,
+        path: txData.path,
+        slippage: 0.5, // 0.5% slippage
+        gasPrice: await this.publicClient.getGasPrice(),
       });
 
       logger.info(`Transaction sent: ${txHash}`);
