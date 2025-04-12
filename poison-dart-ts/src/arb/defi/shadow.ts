@@ -4,14 +4,16 @@
 import {
   type Address,
   type PublicClient,
+  type Transaction,
   type WalletClient,
   encodeFunctionData,
   parseUnits,
 } from 'viem';
 import { Logger } from '../../libs/logger';
-import { DEX_CONTRACTS } from '../config.js';
-import { type Pool, Protocol, type Token } from '../types.js';
-import { BaseDex } from './mod.js';
+import { DEX_CONTRACTS } from '../config';
+import { type Pool, Protocol, type Token } from '../types';
+import { type SwapInfo } from '../core/types';
+import { BaseDex } from './mod';
 
 // Create a logger instance for ShadowDex
 const logger = Logger.forContext('Shadow');
@@ -130,6 +132,65 @@ const SHADOW_POOL_ABI = [
  * Shadow DEX implementation
  */
 export class ShadowDex extends BaseDex {
+  /**
+   * Parse a Shadow transaction
+   * @param publicClient The public client
+   * @param input Transaction input data
+   * @returns Swap information if the transaction is a swap, null otherwise
+   */
+  static async parseTransaction(
+    publicClient: PublicClient,
+    input: `0x${string}`
+  ): Promise<SwapInfo | null> {
+    // Function signatures for Shadow (Uniswap V3 fork)
+    const exactInputSingle = '0x414bf389'; // exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))
+    
+    // Check function signature
+    const signature = input.slice(0, 10);
+    
+    // For simplicity, we'll just handle exactInputSingle
+    if (signature === exactInputSingle) {
+      // Extract parameters from input data
+      // Format: exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96))
+      
+      // Skip function signature (4 bytes) and get the struct parameters
+      const tokenInHex = '0x' + input.slice(34, 74);
+      const tokenOutHex = '0x' + input.slice(98, 138);
+      const feeHex = '0x' + input.slice(138, 202);
+      const amountInHex = '0x' + input.slice(330, 394);
+      
+      const tokenIn = tokenInHex as `0x${string}` as Address;
+      const tokenOut = tokenOutHex as `0x${string}` as Address;
+      const fee = Number(BigInt(feeHex));
+      const amountIn = BigInt(amountInHex);
+      
+      // Find the pool address
+      try {
+        const poolAddress = await ShadowDex.findPool(
+          publicClient,
+          tokenIn,
+          tokenOut,
+          fee
+        );
+        
+        // For simplicity, we'll set amountOut to 0 since we don't know it yet
+        return {
+          protocol: Protocol.Shadow,
+          tokenIn,
+          tokenOut,
+          amountIn,
+          amountOut: BigInt(0),
+          poolAddress,
+        };
+      } catch (error) {
+        // Pool not found
+        return null;
+      }
+    }
+    
+    return null;
+  }
+
   private fee: number;
   private poolLiquidity: bigint | null = null;
 

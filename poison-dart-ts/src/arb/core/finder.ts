@@ -5,6 +5,8 @@ import { type Address, type PublicClient, type Transaction, type WalletClient } 
 import { Logger } from '../../libs/logger';
 import { BASE_TOKENS } from '../config';
 import { type Dex, Path } from '../defi/mod';
+import * as fs from 'fs';
+import * as path from 'path';
 import { HyperSwapV2Dex } from '../defi/hyperswap-v2';
 import { HyperSwapV3Dex } from '../defi/hyperswap-v3';
 import { KittenSwapDex } from '../defi/kittenswap';
@@ -47,13 +49,134 @@ export class ArbitrageFinder {
   async initialize(): Promise<void> {
     logger.info('Initializing arbitrage finder...');
     
-    // Get base tokens for the current chain
-    const baseTokens = Object.values(BASE_TOKENS) as Address[];
+    // Try to load pools from cache
+    const loaded = await this.loadPoolsFromCache();
     
-    // Discover pools between base tokens
-    await this.discoverPools(baseTokens);
+    if (loaded) {
+      logger.info(`Loaded ${this.knownPools.size} pools from cache`);
+      
+      // Rebuild the token graph from the cached pools
+      await this.rebuildTokenGraphFromPools();
+    } else {
+      // Get base tokens for the current chain
+      const baseTokens = Object.values(BASE_TOKENS) as Address[];
+      
+      // Discover pools between base tokens
+      await this.discoverPools(baseTokens);
+      
+      // Save pools to cache
+      await this.savePoolsToCache();
+    }
     
     logger.info(`Initialized with ${this.tokenGraph.size} tokens and ${this.knownPools.size} pools`);
+  }
+  
+  /**
+   * Save pools to cache file
+   */
+  private async savePoolsToCache(): Promise<void> {
+    try {
+      // Convert Map to array for serialization
+      const poolsArray = Array.from(this.knownPools.entries()).map(([key, pool]) => ({
+        key,
+        pool,
+      }));
+      
+      // Create cache directory if it doesn't exist
+      const cacheDir = path.join(process.cwd(), 'cache');
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+      }
+      
+      // Save to file
+      const cacheFile = path.join(cacheDir, `pools-${this.config.chainId}.json`);
+      fs.writeFileSync(cacheFile, JSON.stringify(poolsArray, null, 2));
+      
+      logger.info(`Saved ${poolsArray.length} pools to cache file ${cacheFile}`);
+    } catch (error) {
+      logger.error(`Failed to save pools to cache: ${error}`);
+    }
+  }
+  
+  /**
+   * Load pools from cache file
+   * @returns Whether pools were successfully loaded
+   */
+  private async loadPoolsFromCache(): Promise<boolean> {
+    try {
+      // Check if cache file exists
+      const cacheFile = path.join(process.cwd(), 'cache', `pools-${this.config.chainId}.json`);
+      if (!fs.existsSync(cacheFile)) {
+        logger.info(`Cache file ${cacheFile} not found`);
+        return false;
+      }
+      
+      // Read cache file
+      const cacheData = fs.readFileSync(cacheFile, 'utf-8');
+      const poolsArray = JSON.parse(cacheData) as { key: string; pool: Pool }[];
+      
+      // Clear existing pools
+      this.knownPools.clear();
+      
+      // Add pools to map
+      for (const { key, pool } of poolsArray) {
+        this.knownPools.set(key, pool);
+      }
+      
+      logger.info(`Loaded ${this.knownPools.size} pools from cache file ${cacheFile}`);
+      return true;
+    } catch (error) {
+      logger.error(`Failed to load pools from cache: ${error}`);
+      return false;
+    }
+  }
+  
+  /**
+   * Rebuild token graph from cached pools
+   */
+  private async rebuildTokenGraphFromPools(): Promise<void> {
+    // Clear existing token graph
+    this.tokenGraph = new TokenGraph(this.publicClient);
+    
+    // Add each pool to the token graph
+    for (const pool of this.knownPools.values()) {
+      // Create DEX instances
+      let dexA2B: Dex;
+      let dexB2A: Dex;
+      
+      const tokenA = pool.tokens[0].address;
+      const tokenB = pool.tokens[1].address;
+      
+      switch (pool.protocol) {
+        case Protocol.KittenSwap:
+        case Protocol.KittenSwapStable:
+          dexA2B = new KittenSwapDex(pool, this.publicClient, this.walletClient, true);
+          dexB2A = new KittenSwapDex(pool, this.publicClient, this.walletClient, false);
+          break;
+        case Protocol.HyperSwapV2:
+          dexA2B = new HyperSwapV2Dex(pool, this.publicClient, this.walletClient, true);
+          dexB2A = new HyperSwapV2Dex(pool, this.publicClient, this.walletClient, false);
+          break;
+        case Protocol.HyperSwapV3:
+          dexA2B = new HyperSwapV3Dex(pool, this.publicClient, this.walletClient, true);
+          dexB2A = new HyperSwapV3Dex(pool, this.publicClient, this.walletClient, false);
+          break;
+        case Protocol.Shadow:
+          dexA2B = new ShadowDex(pool, this.publicClient, this.walletClient, true);
+          dexB2A = new ShadowDex(pool, this.publicClient, this.walletClient, false);
+          break;
+        case Protocol.SwapX:
+          dexA2B = new SwapXDex(pool, this.publicClient, this.walletClient, true);
+          dexB2A = new SwapXDex(pool, this.publicClient, this.walletClient, false);
+          break;
+        default:
+          logger.error(`Unsupported protocol: ${pool.protocol}`);
+          continue;
+      }
+      
+      // Add pool to token graph
+      this.tokenGraph.addPool(pool, dexA2B, dexB2A);
+    }
   }
 
   /**
@@ -336,6 +459,11 @@ export class ArbitrageFinder {
     
     // Add pool to known pools
     this.knownPools.set(poolKey, pool);
+    
+    // Save the updated pools to cache
+    this.savePoolsToCache().catch((error) => {
+      logger.error(`Failed to save pools to cache after adding new pool: ${error}`);
+    });
     
     // Create DEX instances
     let dexA2B: Dex;

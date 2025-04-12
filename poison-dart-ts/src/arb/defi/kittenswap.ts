@@ -1,10 +1,11 @@
 /**
  * KittenSwap DEX implementation (Uniswap V2/V3 and Velodrome V1 fork)
  */
-import { type Address, type PublicClient, type WalletClient, encodeFunctionData } from 'viem';
+import { type Address, type PublicClient, type Transaction, type WalletClient, encodeFunctionData } from 'viem';
 import { Logger } from '../../libs/logger';
 import { DEX_CONTRACTS } from '../config';
 import { type Pool, Protocol, type Token } from '../types';
+import { type SwapInfo } from '../core/types';
 import { BaseDex } from './mod';
 
 // Create a logger instance for KittenSwapDex
@@ -90,6 +91,115 @@ const KITTENSWAP_PAIR_ABI = [
  * KittenSwap DEX implementation
  */
 export class KittenSwapDex extends BaseDex {
+  /**
+   * Parse a KittenSwap transaction
+   * @param publicClient The public client
+   * @param input Transaction input data
+   * @returns Swap information if the transaction is a swap, null otherwise
+   */
+  static async parseTransaction(
+    publicClient: PublicClient,
+    input: `0x${string}`
+  ): Promise<SwapInfo | null> {
+    // Function signatures for KittenSwap
+    const swapExactTokensForTokensSimple = '0x42712a67'; // swapExactTokensForTokensSimple(uint256,uint256,address,address,bool,address,uint256)
+    const swapExactTokensForTokens = '0x38ed1739'; // swapExactTokensForTokens(uint256,uint256,address[],address,uint256)
+    const swapExactETHForTokens = '0x7ff36ab5'; // swapExactETHForTokens(uint256,address[],address,uint256)
+    
+    // Check function signature
+    const signature = input.slice(0, 10);
+    
+    // Handle swapExactTokensForTokensSimple
+    if (signature === swapExactTokensForTokensSimple) {
+      // Extract parameters from input data
+      // Format: swapExactTokensForTokensSimple(uint256 amountIn, uint256 amountOutMin, address tokenFrom, address tokenTo, bool stable, address to, uint256 deadline)
+      
+      // Skip function signature (4 bytes) and get the parameters
+      const amountInHex = '0x' + input.slice(10, 74);
+      const tokenFromHex = '0x' + input.slice(138, 178);
+      const tokenToHex = '0x' + input.slice(202, 242);
+      const stableHex = '0x' + input.slice(242, 306);
+      
+      const amountIn = BigInt(amountInHex);
+      const tokenIn = tokenFromHex as `0x${string}` as Address;
+      const tokenOut = tokenToHex as `0x${string}` as Address;
+      const stable = BigInt(stableHex) === BigInt(1);
+      
+      // Find the pool address
+      try {
+        const poolAddress = await KittenSwapDex.findPool(
+          publicClient,
+          tokenIn,
+          tokenOut,
+          stable
+        );
+        
+        // For simplicity, we'll set amountOut to 0 since we don't know it yet
+        return {
+          protocol: stable ? Protocol.KittenSwapStable : Protocol.KittenSwap,
+          tokenIn,
+          tokenOut,
+          amountIn,
+          amountOut: BigInt(0),
+          poolAddress,
+        };
+      } catch (error) {
+        // Pool not found
+        return null;
+      }
+    }
+    
+    // Handle swapExactTokensForTokens (standard Uniswap V2 style)
+    if (signature === swapExactTokensForTokens || signature === swapExactETHForTokens) {
+      // Extract parameters from input data
+      // Format: swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)
+      
+      // Skip function signature (4 bytes) and get the first parameter (amountIn)
+      const amountInHex = '0x' + input.slice(10, 74);
+      const amountIn = BigInt(amountInHex);
+      
+      // Skip to the path parameter (offset 3*32 bytes from the start of parameters)
+      const pathOffsetHex = '0x' + input.slice(138, 202);
+      const pathOffset = Number(BigInt(pathOffsetHex));
+      
+      // Path array length is at the offset
+      const pathLengthHex = '0x' + input.slice(10 + pathOffset * 2, 10 + (pathOffset + 32) * 2);
+      const pathLength = Number(BigInt(pathLengthHex));
+      
+      // Get the first two tokens in the path
+      const tokenInHex = '0x' + input.slice(10 + (pathOffset + 32) * 2, 10 + (pathOffset + 64) * 2).slice(24);
+      const tokenOutHex = '0x' + input.slice(10 + (pathOffset + 64) * 2, 10 + (pathOffset + 96) * 2).slice(24);
+      
+      const tokenIn = `0x${tokenInHex}` as `0x${string}` as Address;
+      const tokenOut = `0x${tokenOutHex}` as `0x${string}` as Address;
+      
+      // Find the pool address - assume volatile pool for standard swaps
+      try {
+        const poolAddress = await KittenSwapDex.findPool(
+          publicClient,
+          tokenIn,
+          tokenOut,
+          false // Assume volatile pool for standard swaps
+        );
+        
+        // For simplicity, we'll set amountOut to 0 since we don't know it yet
+        return {
+          protocol: Protocol.KittenSwap,
+          tokenIn,
+          tokenOut,
+          amountIn,
+          amountOut: BigInt(0),
+          poolAddress,
+        };
+      } catch (error) {
+        // Pool not found
+        return null;
+      }
+    }
+    
+    return null;
+  }
+
   private isStable: boolean;
   private poolLiquidity: bigint | null = null;
 

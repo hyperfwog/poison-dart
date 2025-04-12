@@ -1,10 +1,11 @@
 /**
  * HyperSwap V3 DEX implementation (Uniswap V3 fork)
  */
-import { type Address, type PublicClient, type WalletClient, encodeFunctionData } from 'viem';
+import { type Address, type PublicClient, type Transaction, type WalletClient, encodeFunctionData } from 'viem';
 import { Logger } from '../../libs/logger';
 import { DEX_CONTRACTS } from '../config';
 import { type Pool, Protocol, type Token } from '../types';
+import { type SwapInfo } from '../core/types';
 import { BaseDex } from './mod';
 
 // Create a logger instance for HyperSwapV3Dex
@@ -111,6 +112,68 @@ const HYPERSWAP_V3_POOL_ABI = [
  * HyperSwap V3 DEX implementation
  */
 export class HyperSwapV3Dex extends BaseDex {
+  /**
+   * Parse a HyperSwap V3 transaction
+   * @param publicClient The public client
+   * @param input Transaction input data
+   * @returns Swap information if the transaction is a swap, null otherwise
+   */
+  static async parseTransaction(
+    publicClient: PublicClient,
+    input: `0x${string}`
+  ): Promise<SwapInfo | null> {
+    // Function signatures for HyperSwap V3
+    const exactInputSingle = '0x414bf389'; // exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))
+    const exactInput = '0xc04b8d59'; // exactInput((bytes,address,uint256,uint256,uint256))
+    const exactOutputSingle = '0xdb3e2198'; // exactOutputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))
+    const exactOutput = '0xf28c0498'; // exactOutput((bytes,address,uint256,uint256,uint256))
+    
+    // Check function signature
+    const signature = input.slice(0, 10);
+    
+    // Handle exactInputSingle
+    if (signature === exactInputSingle) {
+      // Extract parameters from input data
+      // Format: exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96))
+      
+      // Skip function signature (4 bytes) and get the struct parameters
+      const tokenInHex = '0x' + input.slice(34, 74);
+      const tokenOutHex = '0x' + input.slice(98, 138);
+      const feeHex = '0x' + input.slice(138, 202);
+      const amountInHex = '0x' + input.slice(330, 394);
+      
+      const tokenIn = tokenInHex as `0x${string}` as Address;
+      const tokenOut = tokenOutHex as `0x${string}` as Address;
+      const fee = Number(BigInt(feeHex));
+      const amountIn = BigInt(amountInHex);
+      
+      // Find the pool address
+      try {
+        const poolAddress = await HyperSwapV3Dex.findPool(
+          publicClient,
+          tokenIn,
+          tokenOut,
+          fee
+        );
+        
+        // For simplicity, we'll set amountOut to 0 since we don't know it yet
+        return {
+          protocol: Protocol.HyperSwapV3,
+          tokenIn,
+          tokenOut,
+          amountIn,
+          amountOut: BigInt(0),
+          poolAddress,
+        };
+      } catch (error) {
+        // Pool not found
+        return null;
+      }
+    }
+    
+    return null;
+  }
+
   private fee: number;
   private poolLiquidity: bigint | null = null;
 

@@ -5,6 +5,7 @@ import type { ActionSubmitter, Strategy } from 'frogberry';
 import type { Block, Log, PublicClient, Transaction, WalletClient } from 'viem';
 import { Logger } from '../libs/logger';
 import type { ArbConfig } from './config';
+import { DEX_CONTRACTS } from './config';
 import { ArbitrageFinder, ArbitrageOpportunity } from './core';
 import { type Action, ActionType, type Event, EventType, Protocol } from './types';
 
@@ -106,7 +107,7 @@ export class ArbStrategy implements Strategy<Event, Action> {
 
   /**
    * Process a new transaction
-   * @param tx The new transaction
+   * @param tx Transaction to parse
    * @param submitter The action submitter
    */
   private async processTransaction(
@@ -117,16 +118,52 @@ export class ArbStrategy implements Strategy<Event, Action> {
 
     // Skip if transaction has no input data
     if (!tx.input || tx.input === '0x') {
+      logger.debug(`Skipping tx ${tx.hash} - no input data`);
       return;
     }
 
     // Check if the transaction is to a known router
     const to = tx.to;
     if (!to) {
+      logger.debug(`Skipping tx ${tx.hash} - no 'to' address`);
+      return;
+    }
+
+    // Log if the transaction is to a known DEX router
+    if (to === DEX_CONTRACTS.HYPERSWAP.V2_ROUTER) {
+      logger.info(`Transaction ${tx.hash} is to HyperSwap V2 Router`);
+    } else if (to === DEX_CONTRACTS.HYPERSWAP.V3_ROUTER) {
+      logger.info(`Transaction ${tx.hash} is to HyperSwap V3 Router`);
+    } else if (to === DEX_CONTRACTS.KITTENSWAP.ROUTER) {
+      logger.info(`Transaction ${tx.hash} is to KittenSwap Router`);
+    } else if (to === DEX_CONTRACTS.SHADOW.ROUTER) {
+      logger.info(`Transaction ${tx.hash} is to Shadow Router`);
+    } else if (to === DEX_CONTRACTS.SWAPX.ROUTER) {
+      logger.info(`Transaction ${tx.hash} is to SwapX Router`);
+    } else {
+      logger.debug(`Transaction ${tx.hash} is not to a known DEX router: ${to}`);
       return;
     }
 
     // Try to parse the transaction as a swap
+    try {
+      const swapInfo = await this.finder.parseTransaction(tx);
+      
+      // Log all detected swaps, even if they don't lead to arbitrage opportunities
+      if (swapInfo) {
+        const protocolName = Protocol[swapInfo.protocol];
+        logger.info(
+          `Detected ${protocolName} swap in tx ${tx.hash}: ${swapInfo.tokenIn} -> ${swapInfo.tokenOut} (amount: ${swapInfo.amountIn})`
+        );
+      } else {
+        logger.info(`Transaction ${tx.hash} is to a known DEX router but could not be parsed as a swap`);
+      }
+    } catch (error) {
+      logger.error(`Error parsing transaction ${tx.hash}: ${error}`);
+      return;
+    }
+
+    // Try to parse the transaction as a swap again for the log
     const swapInfo = await this.finder.parseTransaction(tx);
     
     // Log all detected swaps, even if they don't lead to arbitrage opportunities

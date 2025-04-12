@@ -1,10 +1,11 @@
 /**
  * SwapX DEX implementation (Algebra V4 fork)
  */
-import { type Address, type PublicClient, type WalletClient, encodeFunctionData } from 'viem';
+import { type Address, type PublicClient, type Transaction, type WalletClient, encodeFunctionData } from 'viem';
 import { Logger } from '../../libs/logger';
 import { DEX_CONTRACTS } from '../config';
 import { type Pool, Protocol, type Token } from '../types';
+import { type SwapInfo } from '../core/types';
 import { BaseDex } from './mod';
 
 // Create a logger instance for SwapXDex
@@ -121,6 +122,62 @@ const SWAPX_POOL_ABI = [
  * SwapX DEX implementation
  */
 export class SwapXDex extends BaseDex {
+  /**
+   * Parse a SwapX transaction
+   * @param publicClient The public client
+   * @param input Transaction input data
+   * @returns Swap information if the transaction is a swap, null otherwise
+   */
+  static async parseTransaction(
+    publicClient: PublicClient,
+    input: `0x${string}`
+  ): Promise<SwapInfo | null> {
+    // Function signatures for SwapX (Algebra V4)
+    const exactInputSingle = '0xc36442b5'; // exactInputSingle((address,address,address,uint256,uint256,uint160))
+    
+    // Check function signature
+    const signature = input.slice(0, 10);
+    
+    // For simplicity, we'll just handle exactInputSingle
+    if (signature === exactInputSingle) {
+      // Extract parameters from input data
+      // Format: exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96))
+      
+      // Skip function signature (4 bytes) and get the struct parameters
+      const tokenInHex = '0x' + input.slice(34, 74);
+      const tokenOutHex = '0x' + input.slice(98, 138);
+      const amountInHex = '0x' + input.slice(202, 266);
+      
+      const tokenIn = tokenInHex as `0x${string}` as Address;
+      const tokenOut = tokenOutHex as `0x${string}` as Address;
+      const amountIn = BigInt(amountInHex);
+      
+      // Find the pool address
+      try {
+        const poolAddress = await SwapXDex.findPool(
+          publicClient,
+          tokenIn,
+          tokenOut
+        );
+        
+        // For simplicity, we'll set amountOut to 0 since we don't know it yet
+        return {
+          protocol: Protocol.SwapX,
+          tokenIn,
+          tokenOut,
+          amountIn,
+          amountOut: BigInt(0),
+          poolAddress,
+        };
+      } catch (error) {
+        // Pool not found
+        return null;
+      }
+    }
+    
+    return null;
+  }
+
   private poolLiquidity: bigint | null = null;
   private fee: number | null = null;
 
