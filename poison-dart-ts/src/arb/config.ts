@@ -64,6 +64,8 @@ export const DEX_CONTRACTS = {
   KITTENSWAP: {
     FACTORY: '0xDa12F450580A4cc485C3b501BAB7b0B3cbc3B31B',
     ROUTER: '0xD6EeFfbDAF6503Ad6539CF8f337D79BEbbd40802',
+    // KittenSwap V3 (Uniswap V3 fork)
+    V3_ROUTER: '0x8ffdb06039b1b8188c2c721dc3c435b5773d7346',
   },
   // HyperSwap (Uniswap V2/V3 fork)
   HYPERSWAP: {
@@ -76,6 +78,11 @@ export const DEX_CONTRACTS = {
     V3_QUOTER: '0x03A918028f22D9E1473B7959C927AD7425A45C7C',
     V3_POSITION_MANAGER: '0x6eDA206207c09e5428F281761DdC0D300851fBC8',
     V3_TICK_LENS: '0x8F1eA97FfDfEDA3bE7EabfED95eF49f909b2975A',
+  },
+  // Additional DEX routers discovered through analysis
+  UNKNOWN_DEXES: {
+    // Router with unknown function (0xdd10b14e)
+    ROUTER_2: '0x439e2a96b36db6739b950db6e0b2fe213ea6c142',
   },
 };
 
@@ -127,7 +134,7 @@ export interface ArbConfig {
 export const DEFAULT_CONFIG: Partial<ArbConfig> = {
   rpc: {
     url: 'https://rpc.sonic.fantom.network/',
-    chainId: 250, // Fantom Opera
+    chainId: 146, // Fantom Opera
   },
   maxGasPrice: BigInt(300000000000), // 300 gwei
   minProfitThreshold: BigInt(1000000000000000), // 0.001 FTM

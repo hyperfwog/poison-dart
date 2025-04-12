@@ -1,11 +1,17 @@
 /**
  * HyperSwap V3 DEX implementation (Uniswap V3 fork)
  */
-import { type Address, type PublicClient, type Transaction, type WalletClient, encodeFunctionData } from 'viem';
+import {
+  type Address,
+  type PublicClient,
+  type Transaction,
+  type WalletClient,
+  encodeFunctionData,
+} from 'viem';
 import { Logger } from '../../libs/logger';
 import { DEX_CONTRACTS } from '../config';
+import type { SwapInfo } from '../core/types';
 import { type Pool, Protocol, type Token } from '../types';
-import { type SwapInfo } from '../core/types';
 import { BaseDex } from './mod';
 
 // Create a logger instance for HyperSwapV3Dex
@@ -125,37 +131,49 @@ export class HyperSwapV3Dex extends BaseDex {
     // Function signatures for HyperSwap V3
     const exactInputSingle = '0x414bf389'; // exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))
     const exactInput = '0xc04b8d59'; // exactInput((bytes,address,uint256,uint256,uint256))
-    const exactOutputSingle = '0xdb3e2198'; // exactOutputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))
-    const exactOutput = '0xf28c0498'; // exactOutput((bytes,address,uint256,uint256,uint256))
-    
+    const _exactOutputSingle = '0xdb3e2198'; // exactOutputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))
+    const _exactOutput = '0xf28c0498'; // exactOutput((bytes,address,uint256,uint256,uint256))
+    const multicall = '0xac9650d8'; // multicall(bytes[])
+
     // Check function signature
     const signature = input.slice(0, 10);
-    
+
+    // Create a logger instance
+    const logger = Logger.forContext('HyperSwapV3');
+
     // Handle exactInputSingle
     if (signature === exactInputSingle) {
-      // Extract parameters from input data
-      // Format: exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96))
-      
-      // Skip function signature (4 bytes) and get the struct parameters
-      const tokenInHex = '0x' + input.slice(34, 74);
-      const tokenOutHex = '0x' + input.slice(98, 138);
-      const feeHex = '0x' + input.slice(138, 202);
-      const amountInHex = '0x' + input.slice(330, 394);
-      
-      const tokenIn = tokenInHex as `0x${string}` as Address;
-      const tokenOut = tokenOutHex as `0x${string}` as Address;
-      const fee = Number(BigInt(feeHex));
-      const amountIn = BigInt(amountInHex);
-      
-      // Find the pool address
       try {
-        const poolAddress = await HyperSwapV3Dex.findPool(
-          publicClient,
-          tokenIn,
-          tokenOut,
-          fee
-        );
-        
+        // Extract parameters from input data using a more robust approach
+        // Format: exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96))
+
+        // Skip function signature (4 bytes) and get the struct parameters
+        // The struct starts at offset 4 (after function signature)
+        // Each parameter is 32 bytes, and we need to extract specific parts
+
+        // tokenIn is at offset 4 + 32 = 36, but we need to skip the first 12 bytes of the 32-byte word
+        const tokenInHex = `0x${input.slice(34, 74)}`;
+        // tokenOut is at offset 4 + 64 = 68, but we need to skip the first 12 bytes of the 32-byte word
+        const tokenOutHex = `0x${input.slice(98, 138)}`;
+        // fee is at offset 4 + 96 = 100
+        const feeHex = `0x${input.slice(138, 202)}`;
+        // amountIn is at offset 4 + 160 = 164
+        const amountInHex = `0x${input.slice(330, 394)}`;
+
+        const tokenIn = tokenInHex as `0x${string}` as Address;
+        const tokenOut = tokenOutHex as `0x${string}` as Address;
+        const fee = Number(BigInt(feeHex));
+        const amountIn = BigInt(amountInHex);
+
+        // Log the extracted parameters for debugging
+        logger.debug(`  TokenIn: ${tokenIn}`);
+        logger.debug(`  TokenOut: ${tokenOut}`);
+        logger.debug(`  Fee: ${fee}`);
+        logger.debug(`  AmountIn: ${amountIn}`);
+
+        // Find the pool address
+        const poolAddress = await HyperSwapV3Dex.findPool(publicClient, tokenIn, tokenOut, fee);
+
         // For simplicity, we'll set amountOut to 0 since we don't know it yet
         return {
           protocol: Protocol.HyperSwapV3,
@@ -166,11 +184,156 @@ export class HyperSwapV3Dex extends BaseDex {
           poolAddress,
         };
       } catch (error) {
-        // Pool not found
+        // Log the error but don't throw
+        logger.error(`Error parsing exactInputSingle: ${error}`);
         return null;
       }
     }
-    
+
+    // Handle exactInput
+    if (signature === exactInput) {
+      try {
+        // Format: exactInput((bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum))
+
+        // This is more complex as the path is encoded in bytes
+        // Extract the path offset, which is the first parameter (32 bytes after the function signature)
+        const pathOffsetHex = `0x${input.slice(10, 74)}`;
+        const pathOffset = Number(BigInt(pathOffsetHex));
+
+        // Extract the amountIn, which is the fourth parameter (32*3 bytes after the function signature)
+        const amountInHex = `0x${input.slice(202, 266)}`;
+        const amountIn = BigInt(amountInHex);
+
+        // The path starts at the offset (relative to the start of the function parameters)
+        // First, we need to get the length of the path bytes
+        const pathLengthOffset = 10 + pathOffset * 2; // Convert byte offset to hex string offset
+        const pathLengthHex = `0x${input.slice(pathLengthOffset, pathLengthOffset + 64)}`;
+        const pathLength = Number(BigInt(pathLengthHex));
+
+        // Now we can extract the path bytes
+        const pathBytesOffset = pathLengthOffset + 64;
+        const pathBytes = `0x${input.slice(pathBytesOffset, pathBytesOffset + pathLength * 2)}`;
+
+        // The path is encoded as a sequence of addresses with 3-byte fee values in between
+        // For example: tokenA + fee + tokenB + fee + tokenC
+        // We need at least the first and last token
+
+        // Try to extract the first token (first 20 bytes of the path)
+        let tokenIn: Address | null = null;
+        let tokenOut: Address | null = null;
+
+        if (pathLength >= 20) {
+          tokenIn = `0x${pathBytes.slice(2, 42)}` as `0x${string}` as Address;
+        }
+
+        // Try to extract the last token (last 20 bytes of the path)
+        if (pathLength >= 43) {
+          // 20 (first token) + 3 (fee) + 20 (last token)
+          // The last token starts at offset pathLength - 20
+          const lastTokenOffset = 2 + (pathLength - 20) * 2;
+          tokenOut =
+            `0x${pathBytes.slice(lastTokenOffset, lastTokenOffset + 40)}` as `0x${string}` as Address;
+        }
+
+        logger.debug(`  Detected exactInput with path length: ${pathLength}`);
+        logger.debug(`  First token in path: ${tokenIn}`);
+        logger.debug(`  Last token in path: ${tokenOut}`);
+        logger.debug(`  AmountIn: ${amountIn}`);
+
+        // If we have both tokens, we can return swap info
+        if (tokenIn && tokenOut) {
+          // We don't know the exact pool address for multi-hop paths
+          // For simplicity, we'll just use a placeholder
+          return {
+            protocol: Protocol.HyperSwapV3,
+            tokenIn,
+            tokenOut,
+            amountIn,
+            amountOut: BigInt(0),
+            poolAddress: '0x0000000000000000000000000000000000000000' as Address,
+          };
+        }
+
+        logger.info(`Detected exactInput function, but couldn't extract complete path`);
+        return null;
+      } catch (error) {
+        logger.error(`Error parsing exactInput: ${error}`);
+        return null;
+      }
+    }
+
+    // Handle multicall (which often contains swap functions)
+    if (signature === multicall) {
+      try {
+        // Format: multicall(bytes[] data)
+        // This is complex as it contains multiple function calls
+
+        // Extract the data array offset, which is the first parameter (32 bytes after the function signature)
+        const dataArrayOffsetHex = `0x${input.slice(10, 74)}`;
+        const dataArrayOffset = Number(BigInt(dataArrayOffsetHex));
+
+        // The array starts at the offset (relative to the start of the function parameters)
+        // First, we need to get the length of the array
+        const arrayLengthOffset = 10 + dataArrayOffset * 2; // Convert byte offset to hex string offset
+        const arrayLengthHex = `0x${input.slice(arrayLengthOffset, arrayLengthOffset + 64)}`;
+        const arrayLength = Number(BigInt(arrayLengthHex));
+
+        logger.debug(`  Multicall with ${arrayLength} calls`);
+
+        // For each call in the array, we need to extract the call data
+        // This is quite complex and would require recursive parsing
+        // For now, we'll just check if any of the calls are swap functions
+
+        // Start at the array length offset + 32 bytes (the length itself)
+        let currentOffset = arrayLengthOffset + 64;
+
+        for (let i = 0; i < arrayLength && i < 10; i++) {
+          // Limit to 10 calls to avoid excessive processing
+          // Each element in the array is a bytes value, which starts with an offset
+          const elementOffsetHex = `0x${input.slice(currentOffset, currentOffset + 64)}`;
+          const elementOffset = Number(BigInt(elementOffsetHex));
+
+          // The element starts at the array offset + element offset
+          const elementStart = arrayLengthOffset + elementOffset * 2;
+
+          // First, get the length of the bytes
+          const elementLengthHex = `0x${input.slice(elementStart, elementStart + 64)}`;
+          const elementLength = Number(BigInt(elementLengthHex));
+
+          // Now we can extract the bytes
+          const elementBytesStart = elementStart + 64;
+          const elementBytes = `0x${input.slice(elementBytesStart, elementBytesStart + elementLength * 2)}`;
+
+          // Check if this is a swap function
+          if (elementLength >= 4) {
+            const callSignature = elementBytes.slice(0, 10);
+
+            if (callSignature === exactInputSingle || callSignature === exactInput) {
+              logger.debug(`  Found swap function in multicall: ${callSignature}`);
+
+              // Try to parse this call recursively
+              const swapInfo = await HyperSwapV3Dex.parseTransaction(
+                publicClient,
+                elementBytes as `0x${string}`
+              );
+              if (swapInfo) {
+                return swapInfo;
+              }
+            }
+          }
+
+          // Move to the next element
+          currentOffset += 64;
+        }
+
+        logger.info('Detected multicall function, but no swap functions found or parsing failed');
+        return null;
+      } catch (error) {
+        logger.error(`Error parsing multicall: ${error}`);
+        return null;
+      }
+    }
+
     return null;
   }
 

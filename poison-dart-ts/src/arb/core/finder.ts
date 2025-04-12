@@ -1,23 +1,23 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 /**
  * Arbitrage finder implementation
  */
-import { type Address, type PublicClient, type Transaction, type WalletClient } from 'viem';
+import type { Address, PublicClient, Transaction, WalletClient } from 'viem';
 import { Logger } from '../../libs/logger';
 import { BASE_TOKENS } from '../config';
-import { type Dex, Path } from '../defi/mod';
-import * as fs from 'fs';
-import * as path from 'path';
+import type { ArbConfig } from '../config';
 import { HyperSwapV2Dex } from '../defi/hyperswap-v2';
 import { HyperSwapV3Dex } from '../defi/hyperswap-v3';
 import { KittenSwapDex } from '../defi/kittenswap';
+import { type Dex, Path } from '../defi/mod';
 import { ShadowDex } from '../defi/shadow';
 import { SwapXDex } from '../defi/swapx';
 import { type Pool, Protocol } from '../types';
-import { type ArbConfig } from '../config';
-import { type ArbitrageOpportunity, type SwapInfo } from './types';
 import { TokenGraph } from './graph';
 import { TransactionParser } from './parser';
 import { TradeSimulator } from './simulator';
+import type { ArbitrageOpportunity, SwapInfo } from './types';
 
 // Create a logger instance for the arbitrage finder
 const logger = Logger.forContext('ArbFinder');
@@ -48,29 +48,31 @@ export class ArbitrageFinder {
    */
   async initialize(): Promise<void> {
     logger.info('Initializing arbitrage finder...');
-    
+
     // Try to load pools from cache
     const loaded = await this.loadPoolsFromCache();
-    
+
     if (loaded) {
       logger.info(`Loaded ${this.knownPools.size} pools from cache`);
-      
+
       // Rebuild the token graph from the cached pools
       await this.rebuildTokenGraphFromPools();
     } else {
       // Get base tokens for the current chain
       const baseTokens = Object.values(BASE_TOKENS) as Address[];
-      
+
       // Discover pools between base tokens
       await this.discoverPools(baseTokens);
-      
+
       // Save pools to cache
       await this.savePoolsToCache();
     }
-    
-    logger.info(`Initialized with ${this.tokenGraph.size} tokens and ${this.knownPools.size} pools`);
+
+    logger.info(
+      `Initialized with ${this.tokenGraph.size} tokens and ${this.knownPools.size} pools`
+    );
   }
-  
+
   /**
    * Save pools to cache file
    */
@@ -81,23 +83,23 @@ export class ArbitrageFinder {
         key,
         pool,
       }));
-      
+
       // Create cache directory if it doesn't exist
       const cacheDir = path.join(process.cwd(), 'cache');
       if (!fs.existsSync(cacheDir)) {
         fs.mkdirSync(cacheDir, { recursive: true });
       }
-      
+
       // Save to file
       const cacheFile = path.join(cacheDir, `pools-${this.config.chainId}.json`);
       fs.writeFileSync(cacheFile, JSON.stringify(poolsArray, null, 2));
-      
+
       logger.info(`Saved ${poolsArray.length} pools to cache file ${cacheFile}`);
     } catch (error) {
       logger.error(`Failed to save pools to cache: ${error}`);
     }
   }
-  
+
   /**
    * Load pools from cache file
    * @returns Whether pools were successfully loaded
@@ -110,19 +112,19 @@ export class ArbitrageFinder {
         logger.info(`Cache file ${cacheFile} not found`);
         return false;
       }
-      
+
       // Read cache file
       const cacheData = fs.readFileSync(cacheFile, 'utf-8');
       const poolsArray = JSON.parse(cacheData) as { key: string; pool: Pool }[];
-      
+
       // Clear existing pools
       this.knownPools.clear();
-      
+
       // Add pools to map
       for (const { key, pool } of poolsArray) {
         this.knownPools.set(key, pool);
       }
-      
+
       logger.info(`Loaded ${this.knownPools.size} pools from cache file ${cacheFile}`);
       return true;
     } catch (error) {
@@ -130,23 +132,23 @@ export class ArbitrageFinder {
       return false;
     }
   }
-  
+
   /**
    * Rebuild token graph from cached pools
    */
   private async rebuildTokenGraphFromPools(): Promise<void> {
     // Clear existing token graph
     this.tokenGraph = new TokenGraph(this.publicClient);
-    
+
     // Add each pool to the token graph
     for (const pool of this.knownPools.values()) {
       // Create DEX instances
       let dexA2B: Dex;
       let dexB2A: Dex;
-      
-      const tokenA = pool.tokens[0].address;
-      const tokenB = pool.tokens[1].address;
-      
+
+      const _tokenA = pool.tokens[0].address;
+      const _tokenB = pool.tokens[1].address;
+
       switch (pool.protocol) {
         case Protocol.KittenSwap:
         case Protocol.KittenSwapStable:
@@ -173,7 +175,7 @@ export class ArbitrageFinder {
           logger.error(`Unsupported protocol: ${pool.protocol}`);
           continue;
       }
-      
+
       // Add pool to token graph
       this.tokenGraph.addPool(pool, dexA2B, dexB2A);
     }
@@ -185,13 +187,13 @@ export class ArbitrageFinder {
    */
   private async discoverPools(tokens: Address[]): Promise<void> {
     logger.info(`Discovering pools between ${tokens.length} tokens...`);
-    
+
     // For each pair of tokens, try to find pools
     for (let i = 0; i < tokens.length; i++) {
       for (let j = i + 1; j < tokens.length; j++) {
         const tokenA = tokens[i];
         const tokenB = tokens[j];
-        
+
         await this.discoverPoolsForPair(tokenA, tokenB);
       }
     }
@@ -221,10 +223,10 @@ export class ArbitrageFinder {
   private async findHyperEVMPools(tokenA: Address, tokenB: Address): Promise<void> {
     // Try to find KittenSwap pools (both volatile and stable)
     await this.findKittenSwapPools(tokenA, tokenB);
-    
+
     // Try to find HyperSwap V2 pools
     await this.findHyperSwapV2Pools(tokenA, tokenB);
-    
+
     // Try to find HyperSwap V3 pools with different fee tiers
     await this.findHyperSwapV3Pools(tokenA, tokenB);
   }
@@ -237,7 +239,7 @@ export class ArbitrageFinder {
   private async findSonicPools(tokenA: Address, tokenB: Address): Promise<void> {
     // Try to find Shadow pools with different fee tiers
     await this.findShadowPools(tokenA, tokenB);
-    
+
     // Try to find SwapX pools
     await this.findSwapXPools(tokenA, tokenB);
   }
@@ -250,45 +252,23 @@ export class ArbitrageFinder {
   private async findKittenSwapPools(tokenA: Address, tokenB: Address): Promise<void> {
     try {
       // Try volatile pool
-      const volatilePool = await KittenSwapDex.findPool(
-        this.publicClient,
-        tokenA,
-        tokenB,
-        false
-      );
-      
-      await this.addPoolToGraph(
-        Protocol.KittenSwap,
-        volatilePool,
-        tokenA,
-        tokenB,
-        false
-      );
-      
+      const volatilePool = await KittenSwapDex.findPool(this.publicClient, tokenA, tokenB, false);
+
+      await this.addPoolToGraph(Protocol.KittenSwap, volatilePool, tokenA, tokenB, false);
+
       logger.debug(`Found KittenSwap volatile pool for ${tokenA}-${tokenB}: ${volatilePool}`);
-    } catch (error) {
+    } catch (_error) {
       // Pool doesn't exist, ignore
     }
-    
+
     try {
       // Try stable pool
-      const stablePool = await KittenSwapDex.findPool(
-        this.publicClient,
-        tokenA,
-        tokenB,
-        true
-      );
-      
-      await this.addPoolToGraph(
-        Protocol.KittenSwapStable,
-        stablePool,
-        tokenA,
-        tokenB,
-        true
-      );
-      
+      const stablePool = await KittenSwapDex.findPool(this.publicClient, tokenA, tokenB, true);
+
+      await this.addPoolToGraph(Protocol.KittenSwapStable, stablePool, tokenA, tokenB, true);
+
       logger.debug(`Found KittenSwap stable pool for ${tokenA}-${tokenB}: ${stablePool}`);
-    } catch (error) {
+    } catch (_error) {
       // Pool doesn't exist, ignore
     }
   }
@@ -300,21 +280,12 @@ export class ArbitrageFinder {
    */
   private async findHyperSwapV2Pools(tokenA: Address, tokenB: Address): Promise<void> {
     try {
-      const pool = await HyperSwapV2Dex.findPool(
-        this.publicClient,
-        tokenA,
-        tokenB
-      );
-      
-      await this.addPoolToGraph(
-        Protocol.HyperSwapV2,
-        pool,
-        tokenA,
-        tokenB
-      );
-      
+      const pool = await HyperSwapV2Dex.findPool(this.publicClient, tokenA, tokenB);
+
+      await this.addPoolToGraph(Protocol.HyperSwapV2, pool, tokenA, tokenB);
+
       logger.debug(`Found HyperSwap V2 pool for ${tokenA}-${tokenB}: ${pool}`);
-    } catch (error) {
+    } catch (_error) {
       // Pool doesn't exist, ignore
     }
   }
@@ -327,27 +298,15 @@ export class ArbitrageFinder {
   private async findHyperSwapV3Pools(tokenA: Address, tokenB: Address): Promise<void> {
     // Try different fee tiers
     const feeTiers = [500, 3000, 10000]; // 0.05%, 0.3%, 1%
-    
+
     for (const fee of feeTiers) {
       try {
-        const pool = await HyperSwapV3Dex.findPool(
-          this.publicClient,
-          tokenA,
-          tokenB,
-          fee
-        );
-        
-        await this.addPoolToGraph(
-          Protocol.HyperSwapV3,
-          pool,
-          tokenA,
-          tokenB,
-          undefined,
-          fee
-        );
-        
+        const pool = await HyperSwapV3Dex.findPool(this.publicClient, tokenA, tokenB, fee);
+
+        await this.addPoolToGraph(Protocol.HyperSwapV3, pool, tokenA, tokenB, undefined, fee);
+
         logger.debug(`Found HyperSwap V3 pool for ${tokenA}-${tokenB} with fee ${fee}: ${pool}`);
-      } catch (error) {
+      } catch (_error) {
         // Pool doesn't exist, ignore
       }
     }
@@ -361,27 +320,15 @@ export class ArbitrageFinder {
   private async findShadowPools(tokenA: Address, tokenB: Address): Promise<void> {
     // Try different fee tiers
     const feeTiers = [500, 3000, 10000]; // 0.05%, 0.3%, 1%
-    
+
     for (const fee of feeTiers) {
       try {
-        const pool = await ShadowDex.findPool(
-          this.publicClient,
-          tokenA,
-          tokenB,
-          fee
-        );
-        
-        await this.addPoolToGraph(
-          Protocol.Shadow,
-          pool,
-          tokenA,
-          tokenB,
-          undefined,
-          fee
-        );
-        
+        const pool = await ShadowDex.findPool(this.publicClient, tokenA, tokenB, fee);
+
+        await this.addPoolToGraph(Protocol.Shadow, pool, tokenA, tokenB, undefined, fee);
+
         logger.debug(`Found Shadow pool for ${tokenA}-${tokenB} with fee ${fee}: ${pool}`);
-      } catch (error) {
+      } catch (_error) {
         // Pool doesn't exist, ignore
       }
     }
@@ -394,21 +341,12 @@ export class ArbitrageFinder {
    */
   private async findSwapXPools(tokenA: Address, tokenB: Address): Promise<void> {
     try {
-      const pool = await SwapXDex.findPool(
-        this.publicClient,
-        tokenA,
-        tokenB
-      );
-      
-      await this.addPoolToGraph(
-        Protocol.SwapX,
-        pool,
-        tokenA,
-        tokenB
-      );
-      
+      const pool = await SwapXDex.findPool(this.publicClient, tokenA, tokenB);
+
+      await this.addPoolToGraph(Protocol.SwapX, pool, tokenA, tokenB);
+
       logger.debug(`Found SwapX pool for ${tokenA}-${tokenB}: ${pool}`);
-    } catch (error) {
+    } catch (_error) {
       // Pool doesn't exist, ignore
     }
   }
@@ -427,21 +365,21 @@ export class ArbitrageFinder {
     poolAddress: Address,
     tokenA: Address,
     tokenB: Address,
-    isStable?: boolean,
+    _isStable?: boolean,
     fee?: number
   ): Promise<void> {
     // Create pool key
     const poolKey = `${protocol}-${poolAddress}`;
-    
+
     // Skip if we already know this pool
     if (this.knownPools.has(poolKey)) {
       return;
     }
-    
+
     // Get token info
     const tokenAInfo = await this.tokenGraph.getTokenInfo(tokenA);
     const tokenBInfo = await this.tokenGraph.getTokenInfo(tokenB);
-    
+
     // Create pool object
     const pool: Pool = {
       protocol,
@@ -451,24 +389,24 @@ export class ArbitrageFinder {
         { address: tokenB, symbol: tokenBInfo.symbol, decimals: tokenBInfo.decimals },
       ],
     };
-    
+
     // Add fee for HyperSwap V3 and Shadow
     if ((protocol === Protocol.HyperSwapV3 || protocol === Protocol.Shadow) && fee !== undefined) {
       pool.fee = fee;
     }
-    
+
     // Add pool to known pools
     this.knownPools.set(poolKey, pool);
-    
+
     // Save the updated pools to cache
     this.savePoolsToCache().catch((error) => {
       logger.error(`Failed to save pools to cache after adding new pool: ${error}`);
     });
-    
+
     // Create DEX instances
     let dexA2B: Dex;
     let dexB2A: Dex;
-    
+
     switch (protocol) {
       case Protocol.KittenSwap:
       case Protocol.KittenSwapStable:
@@ -494,7 +432,7 @@ export class ArbitrageFinder {
       default:
         throw new Error(`Unsupported protocol: ${protocol}`);
     }
-    
+
     // Add pool to token graph
     this.tokenGraph.addPool(pool, dexA2B, dexB2A);
   }
@@ -509,7 +447,7 @@ export class ArbitrageFinder {
     if (!tx.input || tx.input === '0x') {
       return null;
     }
-    
+
     // Try to parse the transaction as a swap
     return this.parser.parseTransaction(tx);
   }
@@ -524,15 +462,17 @@ export class ArbitrageFinder {
     if (!tx.input || tx.input === '0x') {
       return [];
     }
-    
+
     // Try to parse the transaction as a swap
     const swapInfo = await this.parseTransaction(tx);
     if (!swapInfo) {
       return [];
     }
-    
-    logger.info(`Found swap in transaction ${tx.hash}: ${swapInfo.protocol} ${swapInfo.tokenIn} -> ${swapInfo.tokenOut}`);
-    
+
+    logger.info(
+      `Found swap in transaction ${tx.hash}: ${swapInfo.protocol} ${swapInfo.tokenIn} -> ${swapInfo.tokenOut}`
+    );
+
     // Find arbitrage opportunities
     return this.findArbitrageOpportunities(swapInfo);
   }
@@ -544,36 +484,36 @@ export class ArbitrageFinder {
    */
   async findArbitrageOpportunities(swapInfo: SwapInfo): Promise<ArbitrageOpportunity[]> {
     logger.debug(`Finding arbitrage opportunities for ${swapInfo.tokenIn} -> ${swapInfo.tokenOut}`);
-    
+
     const opportunities: ArbitrageOpportunity[] = [];
-    
+
     // Try to find arbitrage paths starting from both tokens
     const startTokens = [swapInfo.tokenIn, swapInfo.tokenOut];
-    
+
     for (const startToken of startTokens) {
       // Find potential arbitrage paths
       const paths = this.tokenGraph.findArbitragePaths(startToken, this.config.maxHops);
-      
+
       // Simulate each path
       for (const path of paths) {
         // Skip paths that don't form a cycle
         if (path[0] !== path[path.length - 1]) {
           continue;
         }
-        
+
         // Create a Path object
         const dexPath = this.tokenGraph.createPathFromTokens(path);
         if (dexPath.isEmpty()) {
           continue;
         }
-        
+
         // Try different input amounts
         const inputAmounts = [
           BigInt('1000000000000000000'), // 1 token
           BigInt('10000000000000000000'), // 10 tokens
           BigInt('100000000000000000000'), // 100 tokens
         ];
-        
+
         for (const inputAmount of inputAmounts) {
           // Simulate the trade
           const tradeResult = await this.simulator.simulateTrade(
@@ -582,7 +522,7 @@ export class ArbitrageFinder {
             this.walletClient.account?.address as Address,
             this.config.maxGasPrice
           );
-          
+
           // Check if it's profitable
           if (tradeResult.profit > this.config.minProfitThreshold) {
             // Create an arbitrage opportunity
@@ -594,15 +534,17 @@ export class ArbitrageFinder {
               startToken,
               gasEstimate: tradeResult.gasCost,
             };
-            
+
             opportunities.push(opportunity);
-            
-            logger.info(`Found arbitrage opportunity: ${opportunity.expectedProfit} profit with ${opportunity.protocols.join(' -> ')}`);
+
+            logger.info(
+              `Found arbitrage opportunity: ${opportunity.expectedProfit} profit with ${opportunity.protocols.join(' -> ')}`
+            );
           }
         }
       }
     }
-    
+
     return opportunities;
   }
 
@@ -621,7 +563,7 @@ export class ArbitrageFinder {
       this.walletClient.account?.address as Address,
       this.config.maxGasPrice
     );
-    
+
     // Create a new opportunity with the optimal input amount
     return {
       ...opportunity,

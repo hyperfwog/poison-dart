@@ -4,8 +4,8 @@ import type { Executor } from 'frogberry';
  */
 import type { PublicClient, WalletClient } from 'viem';
 import { Logger } from '../libs/logger';
-import { type Action, ActionType, type ExecuteTransactionData } from './types';
 import { Trader } from './defi/mod';
+import { type Action, ActionType, type ExecuteTransactionData } from './types';
 
 // Create a logger instance for the executor
 const logger = Logger.forContext('Executor');
@@ -39,11 +39,13 @@ export class TransactionExecutor implements Executor<Action> {
       }
 
       const txData = action.data as ExecuteTransactionData;
-      logger.info(`Executing arbitrage transaction for opportunity from tx ${txData.triggerTxHash}`);
-      
+      logger.info(
+        `Executing arbitrage transaction for opportunity from tx ${txData.triggerTxHash}`
+      );
+
       // Create a trader instance
       const trader = new Trader(this.publicClient, this.walletClient);
-      
+
       // Execute the trade
       const txHash = await trader.executeTrade({
         sender: this.walletClient.account.address,

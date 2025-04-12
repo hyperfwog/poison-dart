@@ -2,10 +2,14 @@
  * Arbitrage finder for HyperEVM DEXes
  * This is a wrapper around the core/finder.ts implementation
  */
-import { type Address, type PublicClient, type Transaction, type WalletClient } from 'viem';
+import type { Address, PublicClient, Transaction, WalletClient } from 'viem';
 import { Logger } from '../libs/logger';
-import { type ArbConfig } from './config';
-import { ArbitrageFinder as CoreArbitrageFinder, type ArbitrageOpportunity, type SwapInfo } from './core';
+import type { ArbConfig } from './config';
+import {
+  type ArbitrageOpportunity,
+  ArbitrageFinder as CoreArbitrageFinder,
+  type SwapInfo,
+} from './core';
 
 // Create a logger instance for the arbitrage finder
 const logger = Logger.forContext('ArbFinder');

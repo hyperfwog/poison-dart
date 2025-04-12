@@ -1,9 +1,9 @@
 /**
  * Core types for arbitrage finding
  */
-import { type Address } from 'viem';
-import { type Dex, Path } from '../defi/mod';
-import { Protocol } from '../types';
+import type { Address } from 'viem';
+import type { Dex, Path } from '../defi/mod';
+import type { Protocol } from '../types';
 
 /**
  * Represents a token in the arbitrage graph

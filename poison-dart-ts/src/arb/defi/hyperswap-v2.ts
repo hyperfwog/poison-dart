@@ -1,11 +1,17 @@
 /**
  * HyperSwap V2 DEX implementation (Uniswap V2 fork)
  */
-import { type Address, type PublicClient, type Transaction, type WalletClient, encodeFunctionData } from 'viem';
+import {
+  type Address,
+  type PublicClient,
+  type Transaction,
+  type WalletClient,
+  encodeFunctionData,
+} from 'viem';
 import { Logger } from '../../libs/logger';
 import { DEX_CONTRACTS } from '../config';
+import type { SwapInfo } from '../core/types';
 import { type Pool, Protocol, type Token } from '../types';
-import { type SwapInfo } from '../core/types';
 import { BaseDex } from './mod';
 
 // Create a logger instance for HyperSwapV2Dex
@@ -98,50 +104,49 @@ export class HyperSwapV2Dex extends BaseDex {
     // Function signatures for HyperSwap V2
     const swapExactTokensForTokens = '0x38ed1739'; // swapExactTokensForTokens(uint256,uint256,address[],address,uint256)
     const swapTokensForExactTokens = '0x8803dbee'; // swapTokensForExactTokens(uint256,uint256,address[],address,uint256)
-    const swapExactETHForTokens = '0x7ff36ab5'; // swapExactETHForTokens(uint256,address[],address,uint256)
-    const swapTokensForExactETH = '0x4a25d94a'; // swapTokensForExactETH(uint256,uint256,address[],address,uint256)
+    const _swapExactETHForTokens = '0x7ff36ab5'; // swapExactETHForTokens(uint256,address[],address,uint256)
+    const _swapTokensForExactETH = '0x4a25d94a'; // swapTokensForExactETH(uint256,uint256,address[],address,uint256)
     const swapExactTokensForETH = '0x18cbafe5'; // swapExactTokensForETH(uint256,uint256,address[],address,uint256)
-    const swapETHForExactTokens = '0xfb3bdb41'; // swapETHForExactTokens(uint256,address[],address,uint256)
-    
+    const _swapETHForExactTokens = '0xfb3bdb41'; // swapETHForExactTokens(uint256,address[],address,uint256)
+
     // Check function signature
     const signature = input.slice(0, 10);
-    
+
     // Handle different swap functions
-    if (signature === swapExactTokensForTokens || signature === swapTokensForExactTokens || 
-        signature === swapExactTokensForETH) {
+    if (
+      signature === swapExactTokensForTokens ||
+      signature === swapTokensForExactTokens ||
+      signature === swapExactTokensForETH
+    ) {
       // This is a simplified parser and doesn't handle all edge cases
       // In a real implementation, you would use a proper ABI decoder
-      
+
       // Extract parameters from input data
       // Format: swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)
-      
+
       // Skip function signature (4 bytes) and get the first parameter (amountIn)
-      const amountInHex = '0x' + input.slice(10, 74);
+      const amountInHex = `0x${input.slice(10, 74)}`;
       const amountIn = BigInt(amountInHex);
-      
+
       // Skip to the path parameter (offset 3*32 bytes from the start of parameters)
-      const pathOffsetHex = '0x' + input.slice(138, 202);
+      const pathOffsetHex = `0x${input.slice(138, 202)}`;
       const pathOffset = Number(BigInt(pathOffsetHex));
-      
+
       // Path array length is at the offset
-      const pathLengthHex = '0x' + input.slice(10 + pathOffset * 2, 10 + (pathOffset + 32) * 2);
-      const pathLength = Number(BigInt(pathLengthHex));
-      
+      const pathLengthHex = `0x${input.slice(10 + pathOffset * 2, 10 + (pathOffset + 32) * 2)}`;
+      const _pathLength = Number(BigInt(pathLengthHex));
+
       // Get the first two tokens in the path
-      const tokenInHex = '0x' + input.slice(10 + (pathOffset + 32) * 2, 10 + (pathOffset + 64) * 2).slice(24);
-      const tokenOutHex = '0x' + input.slice(10 + (pathOffset + 64) * 2, 10 + (pathOffset + 96) * 2).slice(24);
-      
+      const tokenInHex = `0x${input.slice(10 + (pathOffset + 32) * 2, 10 + (pathOffset + 64) * 2).slice(24)}`;
+      const tokenOutHex = `0x${input.slice(10 + (pathOffset + 64) * 2, 10 + (pathOffset + 96) * 2).slice(24)}`;
+
       const tokenIn = `0x${tokenInHex}` as `0x${string}` as Address;
       const tokenOut = `0x${tokenOutHex}` as `0x${string}` as Address;
-      
+
       // Find the pool address
       try {
-        const poolAddress = await HyperSwapV2Dex.findPool(
-          publicClient,
-          tokenIn,
-          tokenOut
-        );
-        
+        const poolAddress = await HyperSwapV2Dex.findPool(publicClient, tokenIn, tokenOut);
+
         // For simplicity, we'll set amountOut to 0 since we don't know it yet
         return {
           protocol: Protocol.HyperSwapV2,
@@ -151,12 +156,12 @@ export class HyperSwapV2Dex extends BaseDex {
           amountOut: BigInt(0),
           poolAddress,
         };
-      } catch (error) {
+      } catch (_error) {
         // Pool not found
         return null;
       }
     }
-    
+
     return null;
   }
 

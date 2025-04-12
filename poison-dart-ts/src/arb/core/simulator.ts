@@ -1,10 +1,10 @@
 /**
  * Trade simulator for calculating expected profits
  */
-import { type Address, type PublicClient, type WalletClient } from 'viem';
+import type { Address, PublicClient, WalletClient } from 'viem';
 import { Logger } from '../../libs/logger';
 import { type Path, Trader } from '../defi/mod';
-import { type TradeSimulationResult } from './types';
+import type { TradeSimulationResult } from './types';
 
 // Create a logger instance for the trade simulator
 const logger = Logger.forContext('Simulator');
@@ -37,7 +37,7 @@ export class TradeSimulator {
     amountIn: bigint,
     sender: Address,
     gasPrice: bigint,
-    slippage: number = 0.5
+    slippage = 0.5
   ): Promise<TradeSimulationResult> {
     // Skip if path is empty
     if (path.isEmpty()) {
@@ -60,12 +60,11 @@ export class TradeSimulator {
     try {
       // Simulate the trade
       const result = await this.trader.simulateTrade(tradeContext);
-      
+
       // Calculate profit
-      const profit = result.amountOut > amountIn
-        ? result.amountOut - amountIn - result.gasCost
-        : BigInt(0);
-      
+      const profit =
+        result.amountOut > amountIn ? result.amountOut - amountIn - result.gasCost : BigInt(0);
+
       return {
         amountOut: result.amountOut,
         gasCost: result.gasCost,
@@ -113,29 +112,29 @@ export class TradeSimulator {
 
     // Calculate step size
     const stepSize = (maxAmount - minAmount) / BigInt(steps);
-    
+
     // Try different input amounts
     const results: { result: TradeSimulationResult; inputAmount: bigint }[] = [];
-    
+
     for (let i = 0; i <= steps; i++) {
       const inputAmount = minAmount + stepSize * BigInt(i);
       const result = await this.simulateTrade(path, inputAmount, sender, gasPrice);
-      
+
       results.push({
         result,
         inputAmount,
       });
     }
-    
+
     // Find the best result
     let bestResult = results[0];
-    
+
     for (let i = 1; i < results.length; i++) {
       if (results[i].result.profit > bestResult.result.profit) {
         bestResult = results[i];
       }
     }
-    
+
     return bestResult;
   }
 
@@ -170,31 +169,31 @@ export class TradeSimulator {
     }
 
     // Golden ratio
-    const phi = BigInt(1618033988749895) / BigInt(1000000000000000);
-    
+    const _phi = BigInt(1618033988749895) / BigInt(1000000000000000);
+
     // Calculate initial points
     let a = minAmount;
     let b = maxAmount;
-    let c = b - (b - a) * BigInt(1000000000000000) / BigInt(1618033988749895);
-    let d = a + (b - a) * BigInt(1000000000000000) / BigInt(1618033988749895);
-    
+    let c = b - ((b - a) * BigInt(1000000000000000)) / BigInt(1618033988749895);
+    let d = a + ((b - a) * BigInt(1000000000000000)) / BigInt(1618033988749895);
+
     // Evaluate function at c and d
     const fc = await this.simulateTrade(path, c, sender, gasPrice);
     const fd = await this.simulateTrade(path, d, sender, gasPrice);
-    
+
     // Iterate until convergence
     while (b - a > tolerance) {
       if (fc.profit > fd.profit) {
         b = d;
         d = c;
-        c = b - (b - a) * BigInt(1000000000000000) / BigInt(1618033988749895);
-        
+        c = b - ((b - a) * BigInt(1000000000000000)) / BigInt(1618033988749895);
+
         // Re-use fd for the new d
-        const fdOld = fd;
+        const _fdOld = fd;
         fd.profit = fc.profit;
         fd.amountOut = fc.amountOut;
         fd.gasCost = fc.gasCost;
-        
+
         // Evaluate function at c
         const fcNew = await this.simulateTrade(path, c, sender, gasPrice);
         fc.profit = fcNew.profit;
@@ -203,14 +202,14 @@ export class TradeSimulator {
       } else {
         a = c;
         c = d;
-        d = a + (b - a) * BigInt(1000000000000000) / BigInt(1618033988749895);
-        
+        d = a + ((b - a) * BigInt(1000000000000000)) / BigInt(1618033988749895);
+
         // Re-use fc for the new c
-        const fcOld = fc;
+        const _fcOld = fc;
         fc.profit = fd.profit;
         fc.amountOut = fd.amountOut;
         fc.gasCost = fd.gasCost;
-        
+
         // Evaluate function at d
         const fdNew = await this.simulateTrade(path, d, sender, gasPrice);
         fd.profit = fdNew.profit;
@@ -218,18 +217,17 @@ export class TradeSimulator {
         fd.gasCost = fdNew.gasCost;
       }
     }
-    
+
     // Return the best result
     if (fc.profit > fd.profit) {
       return {
         result: fc,
         inputAmount: c,
       };
-    } else {
-      return {
-        result: fd,
-        inputAmount: d,
-      };
     }
+    return {
+      result: fd,
+      inputAmount: d,
+    };
   }
 }

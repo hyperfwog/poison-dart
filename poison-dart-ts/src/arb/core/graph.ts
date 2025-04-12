@@ -1,14 +1,14 @@
 /**
  * Token graph implementation for finding arbitrage paths
  */
-import { type Address, type PublicClient } from 'viem';
+import type { Address, PublicClient } from 'viem';
 import { Logger } from '../../libs/logger';
 import { type Dex, Path } from '../defi/mod';
-import { type Pool, Protocol } from '../types';
-import { type EdgeInfo, type TokenNode } from './types';
+import type { Pool, Protocol } from '../types';
+import type { EdgeInfo, TokenNode } from './types';
 
 // Create a logger instance for the token graph
-const logger = Logger.forContext('TokenGraph');
+const _logger = Logger.forContext('TokenGraph');
 
 /**
  * Class for managing the token graph
@@ -44,7 +44,7 @@ export class TokenGraph {
    * @param decimals Token decimals
    * @returns The token node
    */
-  addNode(token: Address, symbol: string = '', decimals: number = 18): TokenNode {
+  addNode(token: Address, symbol = '', decimals = 18): TokenNode {
     let node = this.graph.get(token);
     if (!node) {
       node = {
@@ -75,7 +75,7 @@ export class TokenGraph {
   ): void {
     // Get or create source token node
     const fromNode = this.addNode(fromToken);
-    
+
     // Create edge info
     const edgeInfo: EdgeInfo = {
       targetToken: toToken,
@@ -83,7 +83,7 @@ export class TokenGraph {
       protocol,
       poolAddress,
     };
-    
+
     // Add edge to source token
     fromNode.connections.set(toToken, edgeInfo);
   }
@@ -97,11 +97,11 @@ export class TokenGraph {
   addPool(pool: Pool, dexA2B: Dex, dexB2A: Dex): void {
     const tokenA = pool.tokens[0].address as Address;
     const tokenB = pool.tokens[1].address as Address;
-    
+
     // Add token nodes with symbol and decimals
     this.addNode(tokenA, pool.tokens[0].symbol, pool.tokens[0].decimals);
     this.addNode(tokenB, pool.tokens[1].symbol, pool.tokens[1].decimals);
-    
+
     // Add edges in both directions
     this.addEdge(tokenA, tokenB, dexA2B, pool.protocol, pool.address as Address);
     this.addEdge(tokenB, tokenA, dexB2A, pool.protocol, pool.address as Address);
@@ -129,40 +129,40 @@ export class TokenGraph {
    */
   findArbitragePaths(startToken: Address, maxHops: number): Address[][] {
     const paths: Address[][] = [];
-    
+
     // Helper function for DFS
     const dfs = (currentToken: Address, currentPath: Address[], depth: number) => {
       // If we've reached the maximum depth, check if we can get back to the start
       if (depth >= maxHops) {
         const tokenNode = this.graph.get(currentToken);
-        if (tokenNode && tokenNode.connections.has(startToken)) {
+        if (tokenNode?.connections.has(startToken)) {
           // We can get back to the start, add the complete cycle
           paths.push([...currentPath, startToken]);
         }
         return;
       }
-      
+
       // Get the token node
       const tokenNode = this.graph.get(currentToken);
       if (!tokenNode) {
         return;
       }
-      
+
       // Try each connection
       for (const [nextToken, _] of tokenNode.connections) {
         // Skip if we've already visited this token
         if (currentPath.includes(nextToken)) {
           continue;
         }
-        
+
         // Add the token to the path and continue DFS
         dfs(nextToken, [...currentPath, nextToken], depth + 1);
       }
     };
-    
+
     // Start DFS from the start token
     dfs(startToken, [startToken], 0);
-    
+
     return paths;
   }
 
@@ -173,28 +173,28 @@ export class TokenGraph {
    */
   createPathFromTokens(tokens: Address[]): Path {
     const dexes: Dex[] = [];
-    
+
     // For each pair of tokens, find a DEX
     for (let i = 0; i < tokens.length - 1; i++) {
       const tokenA = tokens[i];
       const tokenB = tokens[i + 1];
-      
+
       // Get the token node
       const tokenNode = this.graph.get(tokenA);
       if (!tokenNode) {
         return new Path();
       }
-      
+
       // Get the edge
       const edge = tokenNode.connections.get(tokenB);
       if (!edge) {
         return new Path();
       }
-      
+
       // Add the DEX to the path
       dexes.push(edge.dex);
     }
-    
+
     return new Path(dexes);
   }
 
@@ -207,13 +207,13 @@ export class TokenGraph {
     try {
       // Try to get token info from the token graph
       const tokenNode = this.graph.get(token);
-      if (tokenNode && tokenNode.symbol) {
+      if (tokenNode?.symbol) {
         return {
           symbol: tokenNode.symbol,
           decimals: tokenNode.decimals,
         };
       }
-      
+
       // Get token info from the blockchain
       const [symbol, decimals] = await Promise.all([
         this.publicClient.readContract({
@@ -243,15 +243,15 @@ export class TokenGraph {
           functionName: 'decimals',
         }),
       ]);
-      
+
       // Update token graph
       this.updateTokenInfo(token, symbol as string, decimals as number);
-      
+
       return {
         symbol: symbol as string,
         decimals: decimals as number,
       };
-    } catch (error) {
+    } catch (_error) {
       // Default values if we can't get the info
       return {
         symbol: token.slice(0, 6),

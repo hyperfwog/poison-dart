@@ -66,6 +66,7 @@ export interface Token {
  * Represents a DEX protocol
  */
 export enum Protocol {
+  Unknown = 'Unknown',
   Shadow = 'Shadow',
   SwapX = 'SwapX',
   KittenSwap = 'KittenSwap',
