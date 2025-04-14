@@ -1,44 +1,26 @@
 {
   "name": "poison-dart-ts",
-  "version": "0.1.0",
-  "description": "Arbitrage bot converted from Rust to TypeScript",
-  "main": "dist/index.js",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "Arbitrage bot for HyperEVM chain",
+  "main": "src/arb/main.ts",
   "scripts": {
+    "start:arb": "bun run src/arb/main.ts",
+    "dev:arb": "bun run --watch src/arb/main.ts",
     "build": "tsc",
-    "start": "bun run dist/index.js",
-    "dev": "bun run src/index.ts",
-    "test": "bun test",
-    "prepare": "chmod +x dist/index.js",
-    "lint": "biome lint ./src",
-    "format": "biome format --write ./src",
-    "format:check": "biome format ./src",
-    "check": "biome check --fix --unsafe ./src"
-  },
-  "bin": {
-    "poison-dart": "./dist/index.js"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "arbitrage",
-    "bot",
     "defi",
-    "typescript",
-    "bun"
+    "blockchain",
+    "hyperevm"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "commander": "^12.1.0",
-    "dotenv": "^16.5.0",
-    "frogberry": "https://github.com/hyperfwog/frogberry.git",
-    "viem": "^2.26.3",
-    "ws": "^8.18.1",
-    "zod": "^3.24.2"
+    "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
-    "@types/bun": "^1.2.9",
-    "@types/ws": "^8.18.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.0.0"
   }
 }

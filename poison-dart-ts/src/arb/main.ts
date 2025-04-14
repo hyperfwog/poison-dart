@@ -1,137 +1,98 @@
-import { CollectorFilterMap, Engine, type Executor } from 'frogberry';
-import { MempoolCollector } from 'frogberry/collector';
-import { PrinterExecutor, TelegramExecutor } from 'frogberry/executor';
-import { TelegramMessage } from 'frogberry/utils/telegram';
 /**
- * Arbitrage bot main entry point
+ * Main entry point for the arbitrage bot
  */
-import { http, createPublicClient, createWalletClient } from 'viem';
-import { Transaction } from 'viem';
+import { Chain, createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { mainnet } from 'viem/chains';
 import { Logger } from '../libs/logger';
-import { CHAINS, loadConfig } from './config';
-import { TransactionExecutor } from './executor';
-import { ArbStrategy } from './strategy';
-import { type Action, ActionType, type Event, EventType } from './types';
+import { ArbitrageBot } from './arbitrage-bot';
+import { BASE_TOKENS } from './config';
 
-// Create a logger instance for the main module
+// Create a logger instance for the main entry point
 const logger = Logger.forContext('Main');
 
+// Define HyperEVM chain
+const hyperEvm: Chain = {
+  ...mainnet,
+  id: 999,
+  name: 'HyperEVM',
+  nativeCurrency: {
+    name: 'Hype',
+    symbol: 'HYPE',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://rpc.hyperliquid.xyz/evm'],
+    },
+    public: {
+      http: ['https://rpc.hyperliquid.xyz/evm'],
+    },
+  },
+};
+
 /**
- * Main function to run the arbitrage bot
+ * Main function
  */
 async function main() {
-  logger.info('Starting arbitrage bot...');
-
-  // Load configuration
-  const config = loadConfig();
-  logger.info(`Wallet address: ${config.wallet.address}`);
-  logger.info(`Chain ID: ${config.chainId}`);
-
-  // Determine which chain to use
-  const chain = config.chainId === 999 ? CHAINS.HYPEREVM : CHAINS.SONIC;
-  logger.info(`Using chain: ${chain.name}`);
-
-  // Create Viem clients
-  const publicClient = createPublicClient({
-    chain,
-    transport: http(config.rpc.url),
-  });
-
-  const account = privateKeyToAccount(config.wallet.privateKey as `0x${string}`);
-  const walletClient = createWalletClient({
-    account,
-    chain,
-    transport: http(config.rpc.url),
-  });
-
-  // Create the strategy
-  const strategy = new ArbStrategy(publicClient, walletClient, config);
-
-  // Create the engines
-  const mempoolEngine = new Engine<Event, Action>();
-
-  // Create a mempool collector
-  const mempoolCollector = MempoolCollector.withHttp(config.rpc.url, chain);
-
-  // Create a custom collector
-  mempoolEngine.addCollector({
-    name: () => 'MempoolEventCollector',
-    async getEventStream() {
-      const stream = await mempoolCollector.getEventStream();
-
-      // Create a wrapper stream that converts Transaction to Event
-      return {
-        async next(): Promise<IteratorResult<Event>> {
-          const result = await stream.next();
-
-          if (result.done) {
-            return { done: true, value: undefined };
-          }
-
-          // Convert Transaction to Event with specific EventType
-          const event: Event = {
-            type: EventType.Transaction,
-            data: result.value,
-          };
-
-          return { done: false, value: event };
-        },
-      };
-    },
-  });
-
-  // Add strategies
-  mempoolEngine.addStrategy(strategy);
-
-  // Add executors
-  const txExecutor = new TransactionExecutor(walletClient, publicClient);
-  mempoolEngine.addExecutor(txExecutor);
-
-  // Add printer executor for debugging
-  const printerExecutor = new PrinterExecutor();
-  mempoolEngine.addExecutor(printerExecutor);
-
-  // Add telegram executor if configured
-  if (config.telegram) {
-    // Create a filtered executor that only processes NotifyViaTelegram actions
-    const telegramExecutor = new TelegramExecutor(config.telegram);
-
-    // Create a wrapper executor that extracts the message from the action
-    const telegramWrapperExecutor: Executor<Action> = {
-      name: () => 'TelegramWrapperExecutor',
-      execute: async (action: Action) => {
-        if (action.type === ActionType.NotifyViaTelegram) {
-          return telegramExecutor.execute(action.data);
-        }
-      },
-    };
-
-    mempoolEngine.addExecutor(telegramWrapperExecutor);
-    logger.info('Telegram notifications enabled');
-  }
-
-  // Run the engines
-  logger.info('Starting engines...');
-
-  // Run the mempool engine
-  mempoolEngine
-    .run()
-    .then(() => {
-      logger.success('Mempool engine started');
-    })
-    .catch((err) => {
-      logger.error(`Error starting mempool engine: ${err}`, err);
+  try {
+    logger.info('Starting arbitrage bot');
+    
+    // Create public client
+    const publicClient = createPublicClient({
+      chain: hyperEvm,
+      transport: http('https://rpc.hyperliquid.xyz/evm'),
     });
-
-  // Keep the process running
-  await new Promise((resolve) => setTimeout(resolve, 24 * 60 * 60 * 1000)); // Run for 24 hours
-}
-
-// Run the main function
-if (require.main === module) {
-  main().catch((err) => {
-    logger.error(`Error: ${err}`, err);
+    
+    // Create wallet client
+    const privateKey = process.env.PRIVATE_KEY;
+    if (!privateKey) {
+      throw new Error('PRIVATE_KEY environment variable is not set');
+    }
+    
+    const account = privateKeyToAccount(privateKey as `0x${string}`);
+    const walletClient = createWalletClient({
+      account,
+      chain: hyperEvm,
+      transport: http('https://rpc.hyperliquid.xyz/evm'),
+    });
+    
+    // Create arbitrage bot
+    const bot = new ArbitrageBot(
+      publicClient,
+      walletClient,
+      999, // HyperEVM chain ID
+      Object.values(BASE_TOKENS) as `0x${string}`[]
+    );
+    
+    // Initialize bot
+    await bot.initialize();
+    
+    // Start bot
+    await bot.start();
+    
+    // Handle shutdown
+    process.on('SIGINT', async () => {
+      logger.info('Shutting down arbitrage bot');
+      await bot.stop();
+      process.exit(0);
+    });
+    
+    process.on('SIGTERM', async () => {
+      logger.info('Shutting down arbitrage bot');
+      await bot.stop();
+      process.exit(0);
+    });
+    
+    logger.info('Arbitrage bot started');
+  } catch (error) {
+    logger.error('Error starting arbitrage bot:', error);
     process.exit(1);
-  });
+  }
 }
+
+// Run main function
+main().catch((error) => {
+  logger.error('Unhandled error:', error);
+  process.exit(1);
+});

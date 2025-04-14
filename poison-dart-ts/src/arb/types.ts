@@ -1,8 +1,11 @@
 import type { TelegramMessage } from 'frogberry/utils/telegram';
 /**
  * Types for the arbitrage bot
+ * Enhanced version based on Rust implementation
  */
 import type { Block, Hash, Log, Transaction } from 'viem';
+import type { Address } from 'viem';
+import type { Path } from './defi/mod';
 
 /**
  * Event types that can be processed by the arbitrage strategy
@@ -11,6 +14,7 @@ export enum EventType {
   Block = 'Block',
   Transaction = 'Transaction',
   Log = 'Log',
+  SwapEvent = 'SwapEvent',
 }
 
 /**
@@ -19,7 +23,8 @@ export enum EventType {
 export type Event =
   | { type: EventType.Block; data: Block }
   | { type: EventType.Transaction; data: Transaction }
-  | { type: EventType.Log; data: Log };
+  | { type: EventType.Log; data: Log }
+  | { type: EventType.SwapEvent; data: SwapEvent };
 
 /**
  * Action types that can be executed by the arbitrage bot
@@ -27,15 +32,29 @@ export type Event =
 export enum ActionType {
   ExecuteTransaction = 'ExecuteTransaction',
   NotifyViaTelegram = 'NotifyViaTelegram',
+  SubmitBid = 'SubmitBid',
 }
 
 /**
  * Data for executing a transaction
  */
 export interface ExecuteTransactionData {
-  path: any; // Path object from the arbitrage opportunity
+  path: Path; // Path object from the arbitrage opportunity
   inputAmount: bigint; // Amount to use for the arbitrage
   triggerTxHash: string; // Transaction hash that triggered the arbitrage
+  flashloan?: boolean; // Whether to use flashloan
+  deadline?: number; // Optional deadline for time-sensitive opportunities
+}
+
+/**
+ * Data for submitting a bid
+ */
+export interface SubmitBidData {
+  path: Path; // Path object from the arbitrage opportunity
+  inputAmount: bigint; // Amount to use for the arbitrage
+  bidAmount: bigint; // Amount to bid
+  triggerTxHash: string; // Transaction hash that triggered the arbitrage
+  deadline: number; // Deadline for the bid
 }
 
 /**
@@ -43,7 +62,8 @@ export interface ExecuteTransactionData {
  */
 export type Action =
   | { type: ActionType.ExecuteTransaction; data: ExecuteTransactionData }
-  | { type: ActionType.NotifyViaTelegram; data: TelegramMessage };
+  | { type: ActionType.NotifyViaTelegram; data: TelegramMessage }
+  | { type: ActionType.SubmitBid; data: SubmitBidData };
 
 /**
  * Source of an arbitrage opportunity
@@ -51,6 +71,7 @@ export type Action =
 export enum Source {
   Public = 'Public',
   Mempool = 'Mempool',
+  Private = 'Private',
 }
 
 /**
@@ -84,6 +105,9 @@ export interface Pool {
   tokens: Token[];
   fee?: number;
   tickSpacing?: number;
+  reserves?: [bigint, bigint]; // Token reserves for constant product pools
+  liquidity?: bigint; // Liquidity for concentrated liquidity pools
+  sqrtPriceX96?: bigint; // Current price for concentrated liquidity pools
 }
 
 /**
@@ -97,4 +121,14 @@ export interface SwapEvent {
   amountsIn: bigint[];
   amountsOut: bigint[];
   transaction: Hash;
+  blockNumber: number;
+  timestamp: number;
+}
+
+/**
+ * Trade type
+ */
+export enum TradeType {
+  Swap = 'Swap',
+  Flashloan = 'Flashloan',
 }

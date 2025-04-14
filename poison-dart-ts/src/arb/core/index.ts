@@ -1,9 +1,9 @@
 /**
- * Core modules for arbitrage finding
+ * Core module exports
  */
-
-export * from './types';
-export * from './graph';
-export * from './parser';
-export * from './simulator';
+export * from './arb-cache';
 export * from './finder';
+export * from './graph';
+export * from './simulator';
+export * from './types';
+export * from './worker';
