@@ -260,7 +260,7 @@ export class ArbitrageBot {
       // Create transaction
       const tx = {
         from: sender,
-        to: opportunity.path.path[0].address(),
+        to: opportunity.path.getPools()[0].pool.address,
         data: '0x', // In a real implementation, you would create the transaction data
         value: BigInt(0),
       };

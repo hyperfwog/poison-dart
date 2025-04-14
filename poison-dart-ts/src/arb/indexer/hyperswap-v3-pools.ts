@@ -4,7 +4,7 @@
 import type { Address, PublicClient } from 'viem';
 import { Logger } from '../../libs/logger';
 import { Pool, Protocol } from '../types';
-import { HyperSwapV3Dex } from '../defi/hyperswap-v3';
+import { HyperSwapV3Dex } from '../core/hyperswap-v3';
 import { getTokenInfo } from './indexer-utils';
 
 // Create a logger instance

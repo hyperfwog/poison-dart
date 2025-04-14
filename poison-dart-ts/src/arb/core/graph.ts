@@ -4,9 +4,9 @@
  */
 import type { Address, PublicClient } from 'viem';
 import { Logger } from '../../libs/logger';
-import { type Dex, Path } from '../defi/mod';
 import type { Pool, Protocol } from '../types';
-import type { EdgeInfo, TokenNode } from './types';
+import type { Dex, EdgeInfo, TokenNode } from './types';
+import { Path } from './trader';
 
 // Create a logger instance for the token graph
 const logger = Logger.forContext('TokenGraph');
@@ -282,14 +282,16 @@ export class TokenGraph {
    * @returns Path object
    */
   private createPathFromCycle(cycle: { token: Address; dex: Dex }[]): Path {
-    const dexes: Dex[] = [];
+    const path = new Path();
     
     // Add each DEX to the path
     for (const { dex } of cycle) {
-      dexes.push(dex);
+      if (dex.pool) {
+        path.addPool(dex.pool, false);
+      }
     }
     
-    return new Path(dexes);
+    return path;
   }
 
   /**
@@ -298,7 +300,7 @@ export class TokenGraph {
    * @returns Path object
    */
   createPathFromTokens(tokens: Address[]): Path {
-    const dexes: Dex[] = [];
+    const path = new Path();
 
     // For each pair of tokens, find a DEX
     for (let i = 0; i < tokens.length - 1; i++) {
@@ -318,10 +320,12 @@ export class TokenGraph {
       }
 
       // Add the DEX to the path
-      dexes.push(edge.dex);
+      if (edge.dex.pool) {
+        path.addPool(edge.dex.pool, false);
+      }
     }
 
-    return new Path(dexes);
+    return path;
   }
 
   /**

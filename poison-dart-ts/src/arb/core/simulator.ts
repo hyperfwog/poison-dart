@@ -4,7 +4,7 @@
  */
 import type { Address, PublicClient, WalletClient } from 'viem';
 import { Logger } from '../../libs/logger';
-import { type Path, Trader } from '../defi/mod';
+import { Path, Trader } from './trader';
 import type { TradeSimulationResult, TrialResult } from './types';
 
 // Create a logger instance for the trade simulator

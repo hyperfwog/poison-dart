@@ -3,8 +3,18 @@
  * Enhanced version based on Rust implementation
  */
 import type { Address } from 'viem';
-import type { Dex, Path } from '../defi/mod';
+import type { Path } from './trader';
 import type { Protocol, Source } from '../types';
+
+/**
+ * Represents a DEX (Decentralized Exchange)
+ */
+export interface Dex {
+  protocol: Protocol;
+  address: Address;
+  name: string;
+  pool?: any;
+}
 
 /**
  * Represents a token in the arbitrage graph

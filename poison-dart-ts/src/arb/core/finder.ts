@@ -89,6 +89,8 @@ export class ArbitrageFinder {
       flip: () => {},
       isAToB: () => isA2B,
       swapTx: async () => '0x',
+      pool, // Add the pool object
+      name: `${pool.protocol}-${pool.address}`,
     };
   }
 
@@ -121,7 +123,7 @@ export class ArbitrageFinder {
             path,
             expectedProfit: BigInt(0), // Will be calculated later
             inputAmount: BigInt(0), // Will be calculated later
-            protocols: path.path.map(dex => dex.protocol()),
+            protocols: path.getPools().map(({ pool }) => pool.protocol),
             startToken: baseToken,
             gasEstimate: BigInt(0), // Will be calculated later
             source: Source.Private,
