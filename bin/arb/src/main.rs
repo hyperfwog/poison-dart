@@ -12,7 +12,7 @@ mod types;
 
 use clap::Parser;
 use eyre::Result;
-use dotenv::dotenv;
+//use dotenv::dotenv;
 
 pub const BUILD_VERSION: &str = version::build_version!();
 
@@ -45,7 +45,7 @@ pub enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .env file into environment variables
-    dotenv().ok();
+    //dotenv().ok();
 
     let args = Args::parse();
 
