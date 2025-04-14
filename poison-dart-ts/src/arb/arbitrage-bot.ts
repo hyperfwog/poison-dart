@@ -1,19 +1,21 @@
 /**
- * Main arbitrage bot implementation
+ * Main arbitrage bot implementation with enhanced state management
  */
 import type { Address, PublicClient, WalletClient } from 'viem';
 import { Logger } from '../libs/logger';
-import { EnhancedCollector } from './collector';
 import { ArbitrageCache, ArbitrageFinder, WorkerPool } from './core';
 import { DexIndexer } from './indexer';
+import { EnhancedEventCollector, PoolStateManager } from './state';
 import type { ArbitrageOpportunity } from './core/types';
-import type { Event, Source } from './types';
+import type { Pool } from './types';
+import type { StateEvent } from './state';
+import { StateEventType } from './state';
 
 // Create a logger instance for the arbitrage bot
 const logger = Logger.forContext('ArbitrageBot');
 
 /**
- * Class for the main arbitrage bot
+ * Class for the main arbitrage bot with enhanced state management
  */
 export class ArbitrageBot {
   private publicClient: PublicClient;
@@ -22,7 +24,8 @@ export class ArbitrageBot {
   private finder: ArbitrageFinder;
   private cache: ArbitrageCache;
   private workerPool: WorkerPool;
-  private collector: EnhancedCollector;
+  private stateManager: PoolStateManager;
+  private eventCollector: EnhancedEventCollector;
   private running: boolean = false;
   private baseTokens: Address[];
   private chainId: number;
@@ -42,7 +45,10 @@ export class ArbitrageBot {
     this.indexer = new DexIndexer(publicClient, chainId);
     this.finder = new ArbitrageFinder(publicClient, walletClient, baseTokens);
     this.cache = new ArbitrageCache();
-    this.collector = new EnhancedCollector(publicClient);
+    
+    // Initialize state management
+    this.stateManager = new PoolStateManager();
+    this.eventCollector = new EnhancedEventCollector(publicClient, this.stateManager);
     
     // Initialize worker pool
     this.workerPool = new WorkerPool(
@@ -51,6 +57,9 @@ export class ArbitrageBot {
       walletClient,
       this.handleOpportunityEvaluation.bind(this)
     );
+    
+    // Subscribe to state events
+    this.stateManager.subscribe(this.handleStateEvent.bind(this));
   }
 
   /**
@@ -61,6 +70,9 @@ export class ArbitrageBot {
     
     // Initialize indexer
     await this.indexer.initialize();
+    
+    // Initialize state manager
+    await this.stateManager.initialize(this.chainId);
     
     // Build token graph
     const pools = this.indexer.getAllPools();
@@ -85,7 +97,7 @@ export class ArbitrageBot {
     this.workerPool.start();
     
     // Start event collection
-    this.startEventCollection();
+    await this.eventCollector.start();
     
     // Perform initial arbitrage search
     this.searchForArbitrageOpportunities();
@@ -105,103 +117,81 @@ export class ArbitrageBot {
     logger.info('Stopping arbitrage bot...');
     this.running = false;
     
+    // Stop event collection
+    this.eventCollector.stop();
+    
     // Stop worker pool
     this.workerPool.stop();
+    
+    // Save pool state to cache
+    await this.stateManager.savePoolsToCache(this.chainId);
     
     logger.info('Arbitrage bot stopped');
   }
 
   /**
-   * Start collecting events
+   * Handle state events
+   * @param event State event
    */
-  private async startEventCollection(): Promise<void> {
-    logger.info('Starting event collection');
-    
-    // Get event stream
-    const eventStream = this.collector.getEventStream();
-    
-    // Process events
-    (async () => {
-      for await (const event of eventStream) {
-        if (!this.running) break;
-        
-        try {
-          await this.processEvent(event);
-        } catch (error) {
-          logger.error('Error processing event:', error);
-        }
-      }
-    })();
-  }
-
-  /**
-   * Process an event
-   * @param event Event to process
-   */
-  private async processEvent(event: Event): Promise<void> {
-    // Skip if event type is undefined
-    if (!event.type) {
-      logger.debug('Received event with undefined type, skipping');
-      return;
-    }
+  private async handleStateEvent(event: StateEvent): Promise<void> {
+    if (!this.running) return;
     
     switch (event.type) {
-      case 'Block':
-        // Process block event
-        await this.processBlockEvent(event.data);
+      case StateEventType.PoolCreated:
+      case StateEventType.PoolUpdated:
+        // For both pool creation and updates, we'll rebuild the graph
+        // In a production system, we would want to incrementally update the graph
+        // but for simplicity, we'll just rebuild it
+        logger.info(`Pool ${event.pool.address} ${event.type === StateEventType.PoolCreated ? 'created' : 'updated'}`);
+        this.rebuildGraphWithStatePool(event.pool);
         break;
       
-      case 'Transaction':
-        // Process transaction event
-        await this.processTransactionEvent(event.data);
-        break;
-      
-      case 'Log':
-        // Process log event
-        await this.processLogEvent(event.data);
+      case StateEventType.Swap:
+        // Check for arbitrage opportunities after significant swaps
+        if (this.isSignificantSwap(event)) {
+          this.searchForArbitrageOpportunities();
+        }
         break;
       
       default:
-        logger.warn(`Unknown event type: ${event.type}`);
         break;
     }
   }
-
+  
   /**
-   * Process a block event
-   * @param block Block to process
+   * Rebuild the token graph with the current pools plus a new/updated pool from state
+   * @param statePool Pool from state event
    */
-  private async processBlockEvent(block: any): Promise<void> {
-    logger.debug(`Processing block ${block.number}`);
+  private rebuildGraphWithStatePool(statePool: Pool): void {
+    logger.info(`Rebuilding token graph with updated pool ${statePool.address}`);
     
-    // Periodically search for arbitrage opportunities
-    if (block.number && block.number % BigInt(10) === BigInt(0)) {
-      this.searchForArbitrageOpportunities();
+    // Get all pools from indexer
+    const pools = this.indexer.getAllPools();
+    
+    // Check if the pool already exists in the list
+    const existingPoolIndex = pools.findIndex(p => p.address === statePool.address);
+    
+    if (existingPoolIndex !== -1) {
+      // Replace the existing pool with the updated one
+      pools[existingPoolIndex] = statePool;
+    } else {
+      // Add the new pool to the list
+      pools.push(statePool);
     }
+    
+    // Rebuild the graph with the updated pool list
+    this.finder.buildGraph(pools);
   }
 
   /**
-   * Process a transaction event
-   * @param transaction Transaction to process
+   * Check if a swap is significant enough to trigger arbitrage search
+   * @param event Swap event
+   * @returns Whether the swap is significant
    */
-  private async processTransactionEvent(transaction: any): Promise<void> {
-    logger.debug(`Processing transaction ${transaction.hash}`);
-    
-    // Extract swap information from transaction
-    // In a real implementation, you would analyze the transaction to extract swap information
-    // For now, we'll just skip this
-  }
-
-  /**
-   * Process a log event
-   * @param log Log to process
-   */
-  private async processLogEvent(log: any): Promise<void> {
-    logger.debug(`Processing log ${log.transactionHash}`);
-    
-    // Extract swap information from log
-    // In a real implementation, you would analyze the log to extract swap information
-    // For now, we'll just skip this
+  private isSignificantSwap(event: StateEvent & { type: StateEventType.Swap }): boolean {
+    // In a real implementation, you would check if the swap is large enough
+    // For now, we'll just return true for all swaps
+    return true;
   }
 
   /**

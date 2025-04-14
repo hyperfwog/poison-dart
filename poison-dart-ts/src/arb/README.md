@@ -14,9 +14,10 @@ The arbitrage bot is composed of several key components:
 - **Worker/WorkerPool**: Evaluates arbitrage opportunities in parallel.
 - **Finder**: Discovers arbitrage opportunities using the token graph.
 
-### Data Collection
+### Data Collection and State Management
 
-- **Collector**: Collects events from different sources (mempool, blocks, logs).
+- **Enhanced State Management**: Efficiently manages pool states with generation-based caching and optimized lookups.
+- **Enhanced Event Collector**: Collects events from different sources (mempool, blocks, logs) with improved efficiency.
 - **Indexer**: Discovers and tracks DEX pools.
 
 ### Execution
@@ -37,13 +38,20 @@ The arbitrage bot is composed of several key components:
 3. **Input Amount Optimization**: Grid search and golden section search are used to find the optimal input amount for maximum profit.
 4. **Profit Calculation**: The expected profit is calculated by simulating the trade and subtracting gas costs.
 
-## Event Collection
+## Event Collection and State Management
+
+The bot uses an enhanced state management system for efficient data collection and caching:
+
+- **Unified Event Collection**: Collects events from mempool, blocks, and logs in a unified way with deduplication.
+- **Efficient Pool State Management**: Manages pool states with generation-based caching and optimized lookups.
+- **Event-Based Updates**: Updates pool states based on events (pool creation, updates, swaps, etc.).
+- **Persistent Caching**: Saves pool states to disk for recovery after restarts.
 
 The bot collects events from different sources:
 
-- **Mempool**: Monitors pending transactions for potential arbitrage opportunities.
+- **Mempool**: Monitors pending transactions for potential arbitrage opportunities with WebSocket subscriptions.
 - **Blocks**: Processes new blocks to update the token graph and search for arbitrage opportunities.
-- **Logs**: Monitors DEX events (e.g., swap events) to update pool reserves and detect price changes.
+- **Logs**: Monitors DEX events (e.g., swap events) to update pool reserves and detect price changes with optimized polling.
 
 ## Configuration
 

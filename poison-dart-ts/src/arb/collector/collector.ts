@@ -1,7 +1,7 @@
 /**
  * Event collector for gathering events from different sources
  */
-import type { Address, Block, Hash, Log, PublicClient, Transaction } from 'viem';
+import type { Address, Hash, PublicClient } from 'viem';
 import { Logger } from '../../libs/logger';
 import { EventType } from '../types';
 import type { Event } from '../types';
